@@ -105,7 +105,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     to bytes in memory. Never log the token. Telegram keeps undelivered updates for at most 24
     hours, so nothing else is needed for catch-up.
 
-- [ ] **Task 4: Claude wrapper with cost ceiling** needs: Task 2 (taken: slot 1, 2026-11-13 12:00)
+- [x] **Task 4: Claude wrapper with cost ceiling** needs: Task 2
   - Files: create `src\gym_coach\llm.py`, `tests\test_llm.py`; add FakeClaude to
     `tests\fakes.py`.
   - Done when: `pytest tests\test_llm.py -q` passes: each call writes one `api_calls` row with
