@@ -13,6 +13,8 @@
   explicit `httpx.Timeout(connect=10, read=60, write=10, pool=10)`, no keep-alive pool and
   `Connection: close` so a dead pooled socket cannot be reused. If the hang remains after the
   restart, look at the proxy, IPv6 and the route to api.telegram.org next.
-- `Stop-ScheduledTask gym-coach-bot` ended conhost and powershell but left python running. The
-  launcher now passes `--exit-with-parent`; python watches its parent process and exits when it
-  is gone (checked every 5 s). A bot started before this fix still has to be stopped by hand.
+- `Stop-ScheduledTask gym-coach-bot` ended conhost and powershell but left python running
+  (Task 9d). A parent-watching flag did not help: Task Scheduler stops only the conhost, not the
+  powershell between. The task now starts `pythonw.exe -m gym_coach` directly, so Task Scheduler
+  stops the process it started. A bot started by the old task has to be stopped by hand once,
+  and `scripts\install-logon-task.ps1` re-run.

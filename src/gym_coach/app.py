@@ -94,37 +94,6 @@ class App:
             log.warning("no chat known yet; message not sent")
 
 
-def parent_alive(pid: int) -> bool:
-    """True while the process `pid` still runs."""
-    if os.name == "nt":
-        import ctypes
-        synchronize = 0x00100000
-        handle = ctypes.windll.kernel32.OpenProcess(synchronize, False, pid)
-        if not handle:
-            return False
-        try:
-            return ctypes.windll.kernel32.WaitForSingleObject(handle, 0) == 0x102  # WAIT_TIMEOUT
-        finally:
-            ctypes.windll.kernel32.CloseHandle(handle)
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return False
-    return True
-
-
-def exit_with_parent(pid: int, alive=parent_alive, sleep=time.sleep,
-                     on_gone=lambda: os._exit(0), period_s: float = 5.0) -> None:
-    """Block until `pid` is gone, then call on_gone. Run in a daemon thread.
-
-    Stop-ScheduledTask ends conhost and powershell but not their python child; this makes
-    the bot end with the launcher that started it."""
-    while alive(pid):
-        sleep(period_s)
-    log.info("launcher ended; stopping")
-    on_gone()
-
-
 def run_forever(app: App, scheduler: Scheduler, should_stop=lambda: False,
                 sleep=time.sleep) -> None:
     """Scheduler in a thread; poll loop here. An unexpected error pauses 30 s, then retries."""
@@ -165,15 +134,13 @@ def build(config: Config) -> tuple[App, Scheduler, Store]:
     return app, scheduler, store
 
 
-def main(config: Config, watch_parent: int | None = None) -> None:
+def main(config: Config) -> None:
     data = Path(config.data_dir)
     lock = InstanceLock(data / "bot.lock")
     lock.acquire()  # raises AlreadyRunning
     setup_logging(data)
     app, scheduler, store = build(config)
     log.info("bot started")
-    if watch_parent:
-        threading.Thread(target=exit_with_parent, args=(watch_parent,), daemon=True).start()
     try:
         run_forever(app, scheduler)
     finally:

@@ -32,12 +32,8 @@ def main(argv: list[str]) -> int:
             print("config ok")
         return 0
     from gym_coach import app
-    watch = None
-    if "--exit-with-parent" in argv:
-        import os
-        watch = os.getppid()
     try:
-        app.main(config, watch_parent=watch)
+        app.main(config)
     except app.AlreadyRunning:
         print("Another instance is already running.")
         return 1

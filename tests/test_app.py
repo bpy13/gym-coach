@@ -105,33 +105,13 @@ def test_check_owner_not_paired(tmp_path, monkeypatch, capsys):
     assert "config ok (owner not paired yet)" in capsys.readouterr().out
 
 
-def test_exit_with_parent_fires_when_parent_gone():
-    from gym_coach.app import exit_with_parent
-    states = iter([True, True, False])
-    gone, sleeps = [], []
-    exit_with_parent(1, alive=lambda pid: next(states), sleep=sleeps.append,
-                     on_gone=lambda: gone.append(1))
-    assert gone == [1] and len(sleeps) == 2
-
-
-def test_parent_alive_sees_this_process_and_a_dead_pid():
-    import os
-    import subprocess
-    import sys
-
-    from gym_coach.app import parent_alive
-    assert parent_alive(os.getpid())
-    p = subprocess.Popen([sys.executable, "-c", "pass"])
-    p.wait()
-    assert not parent_alive(p.pid)
-
-
-def test_exit_with_parent_flag_passes_parent_pid(monkeypatch):
-    import os
-
-    import gym_coach.app as appmod
-    seen = {}
-    monkeypatch.setattr(entry, "load_config", lambda: object())
-    monkeypatch.setattr(appmod, "main", lambda cfg, watch_parent=None: seen.update(w=watch_parent))
-    assert entry.main(["--exit-with-parent"]) == 0
-    assert seen["w"] == os.getppid()
+def test_logon_task_starts_pythonw_directly():
+    """Task Scheduler's stop only ends the process it started, so nothing may sit in between."""
+    from pathlib import Path
+    scripts = Path(__file__).resolve().parent.parent / "scripts"
+    text = (scripts / "install-logon-task.ps1").read_text(encoding="utf-8")
+    action = next(ln for ln in text.splitlines() if "New-ScheduledTaskAction" in ln)
+    assert "pythonw.exe" in text and "-m gym_coach" in text
+    assert "conhost" not in action and "powershell" not in action.lower()
+    assert "ExecutionPolicy" not in text
+    assert not (scripts / "run-bot.ps1").exists()

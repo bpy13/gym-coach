@@ -21,8 +21,10 @@ It answers only the one Telegram account you allow.
 ## Run
 - Check settings: `conda run -n gym-coach python -m gym_coach --check`
 - Start the bot: `conda run -n gym-coach python -m gym_coach` (a second copy exits at once;
-  the log is `dataot.log`).
+  the log is `data\bot.log`).
 - Start at logon with no window: run `scripts\install-logon-task.ps1` once. It registers the task
-  `gym-coach-bot`.
+  `gym-coach-bot`, which starts `pythonw.exe -m gym_coach` directly (no powershell or console
+  in between), so `Stop-ScheduledTask gym-coach-bot` really ends the bot. If you registered the
+  task with an older version of the script, run it again.
 
 See `docs/plans/` for the plan.
