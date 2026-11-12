@@ -10,6 +10,7 @@ import time
 from datetime import timedelta
 from pathlib import Path
 
+from gym_coach.albums import session_album
 from gym_coach.config import Config
 from gym_coach.llm import Claude
 from gym_coach.router import Router
@@ -55,7 +56,9 @@ class InstanceLock:
 
 
 class App:
-    def __init__(self, telegram, router: Router, store: Store, chat_id: int | None = None):
+    def __init__(self, telegram, router: Router, store: Store, chat_id: int | None = None,
+                 album_for=None):
+        self.album_for = album_for  # session -> [(jpeg bytes, caption)]
         self.telegram = telegram
         self.router = router
         self.store = store
@@ -72,6 +75,14 @@ class App:
         reply = self.router.handle(text)
         if text.split()[0].lower() == "/start" and not self._has_upcoming_plan():
             reply += "\n\n" + self.router.handle("/propose")
+        session = self.router.pop_album_session()
+        if session and self.album_for:
+            try:
+                album = self.album_for(session)
+                if album:
+                    self.telegram.send_album(incoming.chat_id, album)
+            except Exception:
+                log.exception("sending the proposal's photos failed")
         self.telegram.send_message(incoming.chat_id, reply)
 
     def _has_upcoming_plan(self) -> bool:
@@ -85,6 +96,11 @@ class App:
                 self.handle(incoming)
             except Exception:
                 log.exception("handling a message failed")
+
+    def send_album_to_owner(self, album) -> None:
+        chat = self.chat_id or int(self.store.get("chat_id") or 0)
+        if chat:
+            self.telegram.send_album(chat, album)
 
     def send_to_owner(self, text: str) -> None:
         chat = self.chat_id or int(self.store.get("chat_id") or 0)
@@ -129,8 +145,12 @@ def build(config: Config) -> tuple[App, Scheduler, Store]:
         owner = int(store.get("owner_id"))
     telegram = TelegramClient(config.telegram_bot_token, owner,
                               on_pair=lambda uid: store.set("owner_id", str(uid)))
-    app = App(telegram, router, store)
-    scheduler = Scheduler(store, app.send_to_owner, config.session_time, config.timezone)
+    def album_for(session):
+        return session_album(session, photos_dir=Path(config.photos_dir))
+
+    app = App(telegram, router, store, album_for=album_for)
+    scheduler = Scheduler(store, app.send_to_owner, config.session_time, config.timezone,
+                          album_for=album_for, send_album=app.send_album_to_owner)
     return app, scheduler, store
 
 

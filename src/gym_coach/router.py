@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 from gym_coach import planner, reports
 from gym_coach.context import profile_text
 from gym_coach.llm import HK, CeilingReached, LLMError
+from gym_coach.messages import proposal_message
 
 CLASSIFY_SYSTEM = """You read one message from a gym-goer to his coach bot and classify it.
 Intents: report (he reports sets he did), correction (he fixes a set he already reported),
@@ -33,6 +34,7 @@ class Router:
         self.coach = model_coach
         self._now = now or (lambda: datetime.now(HK))
         self._profile_path = profile_path
+        self.album_session: dict | None = None  # first session of the last proposal
         # keyword arguments for planner.propose (it falls back to data\ when they are None)
         self._planner_kw = {k: v for k, v in
                             (("profile_path", profile_path), ("equipment_path", equipment_path))
@@ -93,8 +95,17 @@ class Router:
     def _propose(self, change: str | None = None) -> str:
         """Propose (or revise) the plan for the proposed week, else for next week."""
         week = self._proposal_week() or self._next_monday()
-        return planner.propose(self.claude, self.store, self.coach, week,
-                               change=change, **self._planner_kw)
+        intro = planner.propose(self.claude, self.store, self.coach, week,
+                                change=change, **self._planner_kw)
+        sessions = self.store.plan_sessions(week.isoformat(),
+                                            (week + timedelta(days=6)).isoformat())
+        self.album_session = next((s for s in sessions if s["kind"] == "strength"), None)
+        return proposal_message(intro, sessions)
+
+    def pop_album_session(self) -> dict | None:
+        """The session whose machine photos go with the last proposal (once)."""
+        session, self.album_session = self.album_session, None
+        return session
 
     def _next_monday(self) -> date:
         today = self._today()

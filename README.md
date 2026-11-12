@@ -27,4 +27,9 @@ It answers only the one Telegram account you allow.
   in between), so `Stop-ScheduledTask gym-coach-bot` really ends the bot. If you registered the
   task with an older version of the script, run it again.
 
+- Machine photos: each session message (and the first session of a proposal) is preceded by one
+  album with the photo of each exercise's machine, taken from the photo ids in
+  `dataequipment.md` and the files in `photoshome` and `photosparents`, shrunk to 1280 px.
+  Needs Pillow: after pulling, run `conda run -n gym-coach pip install -e ".[dev]"`. Restart the bot.
+
 See `docs/plans/` for the plan.

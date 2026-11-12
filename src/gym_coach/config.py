@@ -24,6 +24,7 @@ class Config:
     model_fast: str = "claude-haiku-5-5"
     model_coach: str = "claude-opus-5-5"
     data_dir: str = "data"
+    photos_dir: str = "photos"
 
     def __repr__(self) -> str:
         return "Config(<secrets hidden>)"
@@ -82,4 +83,5 @@ def load_config(env_path: Path | str = ".env", environ: dict[str, str] | None = 
         model_fast=get("MODEL_FAST", "claude-haiku-5-5"),
         model_coach=get("MODEL_COACH", "claude-opus-5-5"),
         data_dir=get("DATA_DIR", "data"),
+        photos_dir=get("PHOTOS_DIR", "photos"),
     )

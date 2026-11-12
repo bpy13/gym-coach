@@ -205,7 +205,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
   - What: find a way that Task Scheduler's stop really ends the bot. Options to weigh: make the task action start python directly with `pythonw.exe`/`python.exe` and no conhost or powershell between (Task Scheduler then stops the process it started), or have the bot watch the conhost grandparent. Prefer the one with fewer moving parts; keep "no window" and no `-ExecutionPolicy Bypass`. If the action changes, Brian re-runs install-logon-task.ps1: say so in the README.
   - Done when: a test covers the chosen mechanism; `pytest -q` and `ruff check .` pass; pushed. Do not start or stop the real bot or the task: the orchestrator gives Brian the steps.
 
-- [ ] **Task 9e: session messages list every exercise and show the machine's photo** needs: Task 9d (slot 1 only) (taken: slot 1, 2026-11-13 04:10)
+- [x] **Task 9e: session messages list every exercise and show the machine's photo** needs: Task 9d (slot 1 only) (ticked 2026-11-13, slot 1: proposal lists every day; albums via albums.py; 97 tests and ruff pass; not run on the real bot: Brian restarts after pip install, orchestrator checks)
   - Brian, 2026-11-13: "message should show images so I know which machine to use" (on seeing the first proposed week, which named machines in text only).
   - Found by the orchestrator, 2026-11-13: the proposal reply sent to Telegram holds only the coach's introduction; the exercises stored in `plan_sessions` never appear in the message.
   - Files: `src\gym_coach\planner.py` or `router.py` (proposal text), `src\gym_coach\messages.py`, `src\gym_coach\telegram.py` (`send_photo` / `send_media_group`), `src\gym_coach\context.py` (photo lookup), their tests, `README.md`.

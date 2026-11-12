@@ -16,9 +16,12 @@ class Scheduler:
     """`send(text)` delivers a message to Brian. `now()` returns an aware datetime."""
 
     def __init__(self, store, send, session_time: str = "07:00",
-                 timezone: str = "Asia/Hong_Kong", now=None):
+                 timezone: str = "Asia/Hong_Kong", now=None,
+                 album_for=None, send_album=None):
         self.store = store
         self.send = send
+        self._album_for = album_for  # session -> [(jpeg bytes, caption)]
+        self._send_album = send_album
         self.session_time = session_time
         self._tz = ZoneInfo(timezone)
         self._now = now or (lambda: datetime.now(self._tz))
@@ -36,9 +39,21 @@ class Scheduler:
         session = self.store.plan_session(day)
         if not session or session["status"] != "approved":
             return
+        self._try_album(session)
         self.send(session_message(session))
         # Marked after the send: a crash in between may repeat a message, never lose one.
         self.store.set(marker, "1")
+
+    def _try_album(self, session: dict) -> None:
+        """Machine photos first; a failure here never blocks the text."""
+        if not (self._album_for and self._send_album):
+            return
+        try:
+            album = self._album_for(session)
+            if album:
+                self._send_album(album)
+        except Exception:
+            log.exception("sending the session's photos failed")
 
     def run(self, should_stop=lambda: False, interval: float = 60.0) -> None:
         while not should_stop():

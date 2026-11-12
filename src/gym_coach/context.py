@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 HK = ZoneInfo("Asia/Hong_Kong")
 DEFAULT_EQUIPMENT = Path("data/equipment.md")
 DEFAULT_PROFILE = Path("data/profile.md")
+DEFAULT_PHOTOS = Path("photos")
 
 _HEADINGS = {"home": "home gym", "parents": "parents' gym"}
 
@@ -59,6 +60,35 @@ def equipment_for(gym: str, path: Path | str = DEFAULT_EQUIPMENT) -> set[str]:
         if name:
             items.add(name)
     return items
+
+
+def equipment_photo_ids(gym: str, path: Path | str = DEFAULT_EQUIPMENT) -> dict[str, str]:
+    """Photo id beside each equipment item of `gym`, e.g. "Chest press: seen (IMG_1)"."""
+    if gym not in _HEADINGS:
+        raise ValueError(f"Unknown gym {gym!r}")
+    ids: dict[str, str] = {}
+    in_section = False
+    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if line.startswith("## "):
+            in_section = line[3:].lower().startswith(_HEADINGS[gym])
+        elif in_section and line.startswith("- "):
+            found = re.search(r"\((IMG_[^)\s]+)\)", line)
+            name = _item_name(line[2:])
+            if found and name:
+                ids.setdefault(name, found.group(1))
+    return ids
+
+
+def photo_file(gym: str, photo_id: str, photos_dir: Path | str = DEFAULT_PHOTOS) -> Path | None:
+    """The file photos/<gym>/<photo_id>.<ext>, or None when it is not there."""
+    folder = Path(photos_dir) / gym
+    if not folder.is_dir():
+        return None
+    for f in sorted(folder.iterdir()):
+        if f.stem == photo_id and f.is_file():
+            return f
+    return None
 
 
 def profile_text(path: Path | str = DEFAULT_PROFILE) -> str:

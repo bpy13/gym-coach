@@ -1,5 +1,6 @@
 """Minimal Telegram Bot API client: long polling, sending text, downloading files."""
 
+import json
 import logging
 import time
 from collections.abc import Callable
@@ -141,6 +142,32 @@ class TelegramClient:
     def send_message(self, chat_id: int, text: str) -> None:
         for chunk in split_text(text):
             self._call("sendMessage", {"chat_id": chat_id, "text": chunk})
+
+    def send_album(self, chat_id: int, photos: list[tuple[bytes, str]]) -> None:
+        """Send (jpeg bytes, caption) pairs as one media group (a single photo goes alone)."""
+        photos = photos[:10]
+        if not photos:
+            return
+        try:
+            if len(photos) == 1:
+                data, caption = photos[0]
+                resp = self._http.post(
+                    self._url("sendPhoto"),
+                    data={"chat_id": chat_id, "caption": caption[:1024]},
+                    files={"photo": ("photo.jpg", data, "image/jpeg")},
+                )
+            else:
+                media = [{"type": "photo", "media": f"attach://p{i}", "caption": cap[:1024]}
+                         for i, (_, cap) in enumerate(photos)]
+                resp = self._http.post(
+                    self._url("sendMediaGroup"),
+                    data={"chat_id": chat_id, "media": json.dumps(media)},
+                    files={f"p{i}": (f"p{i}.jpg", d, "image/jpeg")
+                           for i, (d, _) in enumerate(photos)},
+                )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise TelegramError(f"send album failed: {type(exc).__name__}") from None
 
     def download_file(self, file_id: str) -> bytes:
         info = self._call("getFile", {"file_id": file_id})
