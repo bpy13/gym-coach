@@ -16,4 +16,11 @@ It answers only the one Telegram account you allow.
 - Tests: `conda run -n gym-coach python -m pytest -q`
 - Lint: `conda run -n gym-coach ruff check .`
 
-The bot itself is not built yet; see `docs/plans/` for the plan.
+## Run
+- Check settings: `conda run -n gym-coach python -m gym_coach --check`
+- Start the bot: `conda run -n gym-coach python -m gym_coach` (a second copy exits at once;
+  the log is `dataot.log`).
+- Start at logon with no window: run `scripts\install-logon-task.ps1` once. It registers the task
+  `gym-coach-bot`.
+
+See `docs/plans/` for the plan.

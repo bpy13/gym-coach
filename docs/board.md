@@ -16,3 +16,4 @@
 - Task 6, first schedule and plan proposal (`planner.py`, `prompts.py`): done 2026-11-13 (slot 1). 48 tests pass, ruff clean.
 - Task 7, message router and report logging (`router.py`, `reports.py`): done 2026-11-13 (slot 1). 62 tests pass, ruff clean.
 - Task 8, daily session message and scheduler (`scheduler.py`, `messages.py`): done 2026-11-13 (slot 1). 72 tests pass, ruff clean.
+- Task 9, main program and logon start (`app.py`, `__main__.py`, `scripts\`): done 2026-11-13 (slot 1). 79 tests pass, ruff clean. Logon task not registered: Brian runs `scripts\install-logon-task.ps1` himself.
