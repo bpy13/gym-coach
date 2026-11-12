@@ -81,7 +81,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     the same layout as `data\profile.md` and `data\equipment.md` (read those for the layout; copy
     no real values). Dev dependencies: pytest, ruff.
 
-- [ ] **Task 2: record storage** needs: Task 1 `[parallel-ok]` (taken: slot 2, 2026-11-13 12:00)
+- [x] **Task 2: record storage** needs: Task 1 `[parallel-ok]`
   - Files: create `src\gym_coach\store.py`, `tests\test_store.py`.
   - Done when: `pytest tests\test_store.py -q` passes, including a test that reopening the
     file keeps the data.
@@ -93,7 +93,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     `kv` (key, value) for the Telegram offset, last-sent markers and the approved weekly
     schedule. Write tests first.
 
-- [ ] **Task 3: Telegram client** needs: Task 1 `[parallel-ok]`
+- [ ] **Task 3: Telegram client** needs: Task 1 `[parallel-ok]` (taken: slot 4, 2026-11-13 12:05)
   - Files: create `src\gym_coach\telegram.py`, `tests\test_telegram.py`, `tests\fakes.py`
     (FakeTelegram).
   - Done when: `pytest tests\test_telegram.py -q` passes: updates from another user id are
