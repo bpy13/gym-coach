@@ -103,3 +103,35 @@ def test_check_owner_not_paired(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     assert entry.main(["--check"]) == 0
     assert "config ok (owner not paired yet)" in capsys.readouterr().out
+
+
+def test_exit_with_parent_fires_when_parent_gone():
+    from gym_coach.app import exit_with_parent
+    states = iter([True, True, False])
+    gone, sleeps = [], []
+    exit_with_parent(1, alive=lambda pid: next(states), sleep=sleeps.append,
+                     on_gone=lambda: gone.append(1))
+    assert gone == [1] and len(sleeps) == 2
+
+
+def test_parent_alive_sees_this_process_and_a_dead_pid():
+    import os
+    import subprocess
+    import sys
+
+    from gym_coach.app import parent_alive
+    assert parent_alive(os.getpid())
+    p = subprocess.Popen([sys.executable, "-c", "pass"])
+    p.wait()
+    assert not parent_alive(p.pid)
+
+
+def test_exit_with_parent_flag_passes_parent_pid(monkeypatch):
+    import os
+
+    import gym_coach.app as appmod
+    seen = {}
+    monkeypatch.setattr(entry, "load_config", lambda: object())
+    monkeypatch.setattr(appmod, "main", lambda cfg, watch_parent=None: seen.update(w=watch_parent))
+    assert entry.main(["--exit-with-parent"]) == 0
+    assert seen["w"] == os.getppid()

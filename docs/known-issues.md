@@ -8,3 +8,11 @@
   running and Brian's first message.
 - Checked without the live bot (2026-11-13): 83 tests and ruff pass. Tests cover dropping other
   senders, group messages never pairing, and `.env` owner override.
+- Task 9b (2026-11-13, no real Telegram call by order of the orchestrator): the first
+  `getUpdates` hung past its 60 s client timeout. The root cause is not confirmed. Changes made:
+  explicit `httpx.Timeout(connect=10, read=60, write=10, pool=10)`, no keep-alive pool and
+  `Connection: close` so a dead pooled socket cannot be reused. If the hang remains after the
+  restart, look at the proxy, IPv6 and the route to api.telegram.org next.
+- `Stop-ScheduledTask gym-coach-bot` ended conhost and powershell but left python running. The
+  launcher now passes `--exit-with-parent`; python watches its parent process and exits when it
+  is gone (checked every 5 s). A bot started before this fix still has to be stopped by hand.

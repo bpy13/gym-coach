@@ -160,3 +160,12 @@ def test_set_owner_overrides_pairing():
 
     paired = []
     assert _client(handler, ME, paired).get_updates() == [] and paired == []
+
+
+def test_default_client_has_explicit_timeouts_and_no_keepalive():
+    from gym_coach.telegram import POLL_TIMEOUT_S, new_http_client
+    c = new_http_client()
+    assert c.timeout.read == POLL_TIMEOUT_S + 10
+    assert c.timeout.connect == 10 and c.timeout.write == 10 and c.timeout.pool == 10
+    assert c.headers["connection"] == "close"
+    c.close()

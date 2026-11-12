@@ -13,6 +13,18 @@ MAX_MESSAGE_CHARS = 4000
 MAX_PHOTO_EDGE = 1280
 POLL_TIMEOUT_S = 50
 RETRY_PAUSE_S = 5.0
+# Explicit per-phase limits: the read limit must outlast the long poll by a margin.
+HTTP_TIMEOUT = httpx.Timeout(connect=10, read=POLL_TIMEOUT_S + 10, write=10, pool=10)
+
+
+def new_http_client() -> httpx.Client:
+    """No pooled keep-alive sockets: every call opens a fresh connection, so a dead idle
+    socket can never be reused for the next long poll."""
+    return httpx.Client(
+        timeout=HTTP_TIMEOUT,
+        limits=httpx.Limits(max_keepalive_connections=0),
+        headers={"Connection": "close"},
+    )
 PAIRED_REPLY = "Paired with this account. I will answer only you."
 
 
@@ -69,7 +81,7 @@ class TelegramClient:
         self._token = token
         self._allowed = allowed_user_id  # None until the first private message pairs
         self._on_pair = on_pair
-        self._http = client or httpx.Client(timeout=POLL_TIMEOUT_S + 10)
+        self._http = client or new_http_client()
         self._sleep = sleep
         self.offset = offset  # next update_id to ask for; the caller may persist it
 
