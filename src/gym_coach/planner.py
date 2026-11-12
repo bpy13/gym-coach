@@ -64,7 +64,7 @@ def _message(data: dict) -> str:
 
 
 def propose(claude, store, model: str, week_start: date, change: str | None = None,
-            profile_path=None, equipment_path=None) -> str:
+            profile_path=None, equipment_path=None, illustrations=None) -> str:
     """Ask the coach model for a week plan, validate it, store it as `proposed`.
 
     One regeneration is allowed after a rejected answer; a second rejection raises PlanError.
@@ -74,13 +74,14 @@ def propose(claude, store, model: str, week_start: date, change: str | None = No
     equipment = {g: equipment_for(g, **ekw) for g in ("home", "parents")}
     profile = profile_text(profile_path) if profile_path else profile_text()
     dates = week_dates(week_start)
+    ids = {g: illustrations.allowed(equipment[g]) for g in equipment} if illustrations else None
     previous = store.plan_sessions(dates[0], dates[-1]) or None
     error = None
     for _ in range(2):
         data = claude.json(
             model,
             plan_prompt(profile, equipment["home"], equipment["parents"], dates,
-                        previous, change, error),
+                        previous, change, error, ids),
             system=PLAN_SYSTEM,
         )
         try:
@@ -90,6 +91,10 @@ def propose(claude, store, model: str, week_start: date, change: str | None = No
             error = str(exc)
     else:
         raise PlanError(f"Plan rejected twice: {error}")
+    for s in sessions:  # an illustration id that is not in the gym's list is dropped
+        for ex in s["exercises"]:
+            if ex.get("illustration") not in (ids or {}).get(s["gym"], ()):
+                ex.pop("illustration", None)
     for d in dates:  # a new proposal replaces the old week
         store.delete_plan_session(d)
     for s in sessions:

@@ -32,4 +32,12 @@ It answers only the one Telegram account you allow.
   `dataequipment.md` and the files in `photoshome` and `photosparents`, shrunk to 1280 px.
   Needs Pillow: after pulling, run `conda run -n gym-coach pip install -e ".[dev]"`. Restart the bot.
 
+- Exercise illustrations: for dumbbell, cable and barbell exercises the coach picks an id from
+  the open exercise database free-exercise-db (https://github.com/yuhonas/free-exercise-db,
+  Unlicense: public domain). The album then shows the exercise's start and end images with a
+  short form cue; machines keep your own photo. The exercise list is downloaded once into
+  `data/illustrations/` and each exercise's images the first time it is sent (needs internet then;
+  without it the session still goes out as text). Nothing from there is committed. Existing
+  plans have no illustrations: ask for a new proposal (`/propose`) to get them. Restart the bot.
+
 See `docs/plans/` for the plan.

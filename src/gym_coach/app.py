@@ -12,6 +12,7 @@ from pathlib import Path
 
 from gym_coach.albums import session_album
 from gym_coach.config import Config
+from gym_coach.illustrations import Illustrations
 from gym_coach.llm import Claude
 from gym_coach.router import Router
 from gym_coach.scheduler import Scheduler
@@ -139,14 +140,17 @@ def build(config: Config) -> tuple[App, Scheduler, Store]:
     store = Store(data / "gym.db")
     claude = Claude(anthropic.Anthropic(api_key=config.anthropic_api_key), store,
                     config.monthly_ceiling_usd)
-    router = Router(store, claude, config.model_fast, config.model_coach)
+    illustrations = Illustrations(data / "illustrations")
+    router = Router(store, claude, config.model_fast, config.model_coach,
+                    illustrations=illustrations)
     owner = config.telegram_allowed_user_id
     if owner is None and store.get("owner_id"):
         owner = int(store.get("owner_id"))
     telegram = TelegramClient(config.telegram_bot_token, owner,
                               on_pair=lambda uid: store.set("owner_id", str(uid)))
     def album_for(session):
-        return session_album(session, photos_dir=Path(config.photos_dir))
+        return session_album(session, photos_dir=Path(config.photos_dir),
+                             illustrations=illustrations)
 
     app = App(telegram, router, store, album_for=album_for)
     scheduler = Scheduler(store, app.send_to_owner, config.session_time, config.timezone,

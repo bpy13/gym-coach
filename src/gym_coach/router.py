@@ -27,7 +27,7 @@ HELP = ("Hi! I'm your gym coach. I send the day's session; reply with what you d
 
 class Router:
     def __init__(self, store, claude, model_fast: str, model_coach: str, now=None,
-                 profile_path=None, equipment_path=None):
+                 profile_path=None, equipment_path=None, illustrations=None):
         self.store = store
         self.claude = claude
         self.fast = model_fast
@@ -37,7 +37,8 @@ class Router:
         self.album_session: dict | None = None  # first session of the last proposal
         # keyword arguments for planner.propose (it falls back to data\ when they are None)
         self._planner_kw = {k: v for k, v in
-                            (("profile_path", profile_path), ("equipment_path", equipment_path))
+                            (("profile_path", profile_path), ("equipment_path", equipment_path),
+                             ("illustrations", illustrations))
                             if v}
 
     def handle(self, text: str) -> str:

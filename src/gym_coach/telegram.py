@@ -144,10 +144,12 @@ class TelegramClient:
             self._call("sendMessage", {"chat_id": chat_id, "text": chunk})
 
     def send_album(self, chat_id: int, photos: list[tuple[bytes, str]]) -> None:
-        """Send (jpeg bytes, caption) pairs as one media group (a single photo goes alone)."""
-        photos = photos[:10]
-        if not photos:
-            return
+        """Send (jpeg bytes, caption) pairs as media groups of at most 10 (Telegram's limit);
+        a single photo goes alone."""
+        for i in range(0, len(photos), 10):
+            self._send_group(chat_id, photos[i:i + 10])
+
+    def _send_group(self, chat_id: int, photos: list[tuple[bytes, str]]) -> None:
         try:
             if len(photos) == 1:
                 data, caption = photos[0]
