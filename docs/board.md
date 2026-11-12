@@ -1,6 +1,7 @@
 # Board: gym-coach
 
 ## Workers
+- slot 1: Task 7, message router and report logging, building
 
 ## Ready to build
 
