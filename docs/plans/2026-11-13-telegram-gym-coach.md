@@ -187,6 +187,12 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
   - What: `TELEGRAM_ALLOWED_USER_ID` becomes optional. If it is set, it wins. If it is empty and no owner is stored, the first private-chat message's sender number is stored in `kv` as the owner, the bot replies "Paired with this account. I will answer only you.", and logs "owner paired" (never the number at INFO). From then on every update from another sender is ignored, exactly as with the `.env` value. Group chats never pair. `--check` prints "config ok (owner not paired yet)" when no owner is set or stored. Never write the number into any committed file.
   - Done when: tests with the fakes show: first sender pairs and gets the reply; a second sender is ignored afterwards; a group message never pairs; a set `.env` value overrides pairing; `pytest -q` and `ruff check .` pass; on slot 1 `python -m gym_coach --check` prints "config ok (owner not paired yet)".
 
+- [ ] **Task 9b: the real bot never receives messages** needs: Task 9a (slot 1 only)
+  - Found by the orchestrator, 2026-11-13, with the real bot: Brian sent /start and "hi"; after 3 minutes `data\bot.log` holds only "bot started", nothing paired, no warning. A thread dump after 75 s (faulthandler) shows the main thread still inside the first `getUpdates` POST (`telegram.py` `_call` -> httpx -> `ssl.recv`, waiting for response headers), although the client timeout is 60 s and pending updates should return at once. The PC reaches https://api.telegram.org (curl: 302 in 1 s). Second bug: `Stop-ScheduledTask gym-coach-bot` stops conhost/powershell but leaves `python.exe -m gym_coach` running (the orchestrator had to stop it by PID).
+  - Files: `src\gym_coach\telegram.py`, `src\gym_coach\app.py`, `scripts\run-bot.ps1`, their tests, `docs\known-issues.md`.
+  - What: find the root cause before changing code (debug skill). Leads: httpx timeout semantics with a 50 s long poll (try an explicit `httpx.Timeout(connect=10, read=POLL_TIMEOUT_S + 10, write=10, pool=10)`), HTTP/1.1 keep-alive on a dead pooled socket, IPv6 vs IPv4, a proxy in the environment. Verify against the real Telegram with a short-lived run (a `getMe` and one `getUpdates` with `timeout` 0 is enough; never print or log the token). Make the logon task's stop end the bot too (e.g. run python directly from the task action, or have run-bot.ps1 wait on and stop its child).
+  - Done when: a short real run logs a successful poll within 70 s and, with Brian's queued messages, "owner paired"; a test covers the fixed timeout; `Stop-ScheduledTask gym-coach-bot` leaves no `python.exe -m gym_coach` running; `pytest -q` and `ruff check .` pass. The orchestrator restarts the logon task afterwards (do not leave your own bot instance running).
+
 - [x] **Task 10: Brian creates the Telegram bot and fills `.env`** (ticked 2026-11-13 by the orchestrator: Brian, "API keys added"; the orchestrator saw TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY set without reading them; TELEGRAM_ALLOWED_USER_ID stays empty by decision, see Task 9a)
   - Files: `.env` (never committed).
   - Done when: `python -m gym_coach --check` prints "config ok" on slot 1.
@@ -195,7 +201,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     API key; set a US$5 monthly spend limit in the Anthropic Console; paste the three values
     into `.env`.
 
-- [ ] **Task 11: live check with the real bot** needs: Task 9, Task 9a, Task 10 (slot 1 only) (checkpoint) (waiting: Brian starts the bot via the logon task and sends /start; orchestrator runs the live part)
+- [ ] **Task 11: live check with the real bot** needs: Task 9, Task 9a, Task 9b, Task 10 (slot 1 only) (checkpoint) (waiting: Brian starts the bot via the logon task and sends /start; orchestrator runs the live part)
   - Files: modify `docs\known-issues.md` (create if needed), `docs\open-items.md` via the report.
   - Done when: with the bot running from the logon task, Brian's `/start` yields a real schedule
     and first-week proposal that uses only equipment in `data\equipment.md`; `/cost` shows a
