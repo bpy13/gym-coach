@@ -112,3 +112,4 @@ setting or a small change.
 ## Repository
 - 2026-11-13, Brian ("default"): project name `gym-coach`, folder `repo\gym-coach\`.
 - 2026-11-13, Brian: public GitHub repo on his account, created at "go".
+- 2026-11-13, Brian: the bot learns his Telegram user number from the first private message instead of him copying it into `.env`; a value in `.env` still wins (plan Task 9a). (Brian, 2026-11-13: "ok" (to the orchestrator's question "How should the bot learn your Telegram user number?"; Default: the bot saves the first sender's number and confirms in Telegram; Brian messages it as soon as it starts))
