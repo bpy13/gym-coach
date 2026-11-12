@@ -126,7 +126,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     sections with bullet lists; items carrying "Unsure" or under "Not seen" do not count as
     available. Expose `gym_for(date)`, `equipment_for(gym)`, `profile_text()`.
 
-- [ ] **Task 6: first schedule and plan proposal** needs: Task 2, Task 4, Task 5 (taken: slot 1, 2026-11-13 12:00)
+- [x] **Task 6: first schedule and plan proposal** needs: Task 2, Task 4, Task 5
   - Files: create `src\gym_coach\planner.py`, `src\gym_coach\prompts.py`,
     `tests\test_planner.py`.
   - Done when: `pytest tests\test_planner.py -q` passes with FakeClaude: a plan naming

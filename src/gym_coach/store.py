@@ -68,6 +68,9 @@ class Store:
         )
         return [self._plan(r) for r in rows]
 
+    def delete_plan_session(self, date) -> None:
+        self._run("DELETE FROM plan_sessions WHERE date=?", (date,))
+
     def set_plan_status(self, date, status) -> None:
         self._run("UPDATE plan_sessions SET status=? WHERE date=?", (status, date))
 
