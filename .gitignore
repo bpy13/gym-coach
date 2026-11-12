@@ -1,0 +1,20 @@
+# Personal data: never committed (the repo is public)
+data/
+photos/
+*.db
+*.sqlite
+.env
+.env.*
+!.env.example
+
+# Build and cache output
+node_modules/
+dist/
+build/
+__pycache__/
+.venv/
+.pytest_cache/
+coverage/
+
+# Claude Code local settings
+.claude/settings.local.json
