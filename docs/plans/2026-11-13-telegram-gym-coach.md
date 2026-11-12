@@ -81,7 +81,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     the same layout as `data\profile.md` and `data\equipment.md` (read those for the layout; copy
     no real values). Dev dependencies: pytest, ruff.
 
-- [ ] **Task 2: record storage** needs: Task 1 `[parallel-ok]` (taken: slot 2, 2026-11-13 12:00)
+- [x] **Task 2: record storage** needs: Task 1 `[parallel-ok]`
   - Files: create `src\gym_coach\store.py`, `tests\test_store.py`.
   - Done when: `pytest tests\test_store.py -q` passes, including a test that reopening the
     file keeps the data.
@@ -117,7 +117,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     from the response's `usage`. One function for text, one for text plus one JPEG image.
     Structured answers: ask for JSON and parse it; on a parse failure retry once, then raise.
 
-- [ ] **Task 5: gym for the day and coach context** needs: Task 1 `[parallel-ok]`
+- [ ] **Task 5: gym for the day and coach context** needs: Task 1 `[parallel-ok]` (taken: slot 3, 2026-11-13 12:10)
   - Files: create `src\gym_coach\context.py`, `tests\test_context.py`.
   - Done when: `pytest tests\test_context.py -q` passes: Monday–Friday dates give `home`,
     Saturday–Sunday give `parents` (Hong Kong time); the equipment list for each gym parses from
