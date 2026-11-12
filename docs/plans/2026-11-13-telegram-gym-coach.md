@@ -93,7 +93,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     `kv` (key, value) for the Telegram offset, last-sent markers and the approved weekly
     schedule. Write tests first.
 
-- [ ] **Task 3: Telegram client** needs: Task 1 `[parallel-ok]`
+- [ ] **Task 3: Telegram client** needs: Task 1 `[parallel-ok]` (taken: slot 3, 2026-11-13 12:05)
   - Files: create `src\gym_coach\telegram.py`, `tests\test_telegram.py`, `tests\fakes.py`
     (FakeTelegram).
   - Done when: `pytest tests\test_telegram.py -q` passes: updates from another user id are
