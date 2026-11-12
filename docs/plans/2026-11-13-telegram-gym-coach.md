@@ -65,7 +65,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
 
 ## Phase 1 – Daily session and report (sonnet)
 
-- [ ] **Task 1: project skeleton and environment** (slot 1 only)
+- [ ] **Task 1: project skeleton and environment** (slot 1 only) (taken: slot 1, 2026-11-13 12:00)
   - Files: create `pyproject.toml`, `environment.yml`, `src\gym_coach\__init__.py`,
     `src\gym_coach\config.py`, `tests\test_config.py`, `.env.example`, `README.md`,
     `examples\profile.md`, `examples\equipment.md`; modify `CLAUDE.md` (Environment section).
