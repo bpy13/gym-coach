@@ -1,7 +1,6 @@
 # Board: gym-coach
 
 ## Workers
-- slot 1: Task 8, daily session message and scheduler (building)
 
 ## Ready to build
 
@@ -16,3 +15,4 @@
 - Task 4, Claude wrapper with cost ceiling (`llm.py`): done 2026-11-13 (slot 1). 40 tests pass, ruff clean.
 - Task 6, first schedule and plan proposal (`planner.py`, `prompts.py`): done 2026-11-13 (slot 1). 48 tests pass, ruff clean.
 - Task 7, message router and report logging (`router.py`, `reports.py`): done 2026-11-13 (slot 1). 62 tests pass, ruff clean.
+- Task 8, daily session message and scheduler (`scheduler.py`, `messages.py`): done 2026-11-13 (slot 1). 72 tests pass, ruff clean.
