@@ -167,7 +167,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     in `kv`. Message layout: first line "Home gym, Tue 17 Nov" (or "Parents' gym"), then one
     line per exercise, e.g. "Chest press machine: 3 x 8-12 at 30 kg".
 
-- [ ] **Task 9: main program and logon start** needs: Task 8 (slot 1 only)
+- [ ] **Task 9: main program and logon start** needs: Task 8 (slot 1 only) (taken: slot 1, 2026-11-13 12:00)
   - Files: create `src\gym_coach\app.py`, `src\gym_coach\__main__.py`, `scripts\run-bot.ps1`,
     `scripts\install-logon-task.ps1`, `tests\test_app.py`; modify `README.md`.
   - Done when: `pytest -q` and `ruff check .` pass; `python -m gym_coach --check` prints
