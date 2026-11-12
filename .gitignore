@@ -17,4 +17,5 @@ __pycache__/
 coverage/
 
 # Claude Code local settings
-.claude/settings.local.json*.egg-info/
+.claude/settings.local.json
+*.egg-info/
