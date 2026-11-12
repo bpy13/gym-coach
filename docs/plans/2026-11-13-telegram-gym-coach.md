@@ -142,7 +142,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     weights in 2 kg steps; general guidance, not medical advice. Output JSON matching
     `plan_sessions`. The validator, not the model, enforces equipment and the gym for each date.
 
-- [ ] **Task 7: message router and report logging** needs: Task 3, Task 4, Task 6 (taken: slot 1, 2026-11-13 12:00)
+- [x] **Task 7: message router and report logging** needs: Task 3, Task 4, Task 6
   - Files: create `src\gym_coach\router.py`, `src\gym_coach\reports.py`,
     `tests\test_router.py`, `tests\test_reports.py`.
   - Done when: both test files pass with the fakes: "chest press 35kg 10 10 8, lat pulldown 40

@@ -63,6 +63,10 @@ class Claude:
         self._ceiling = ceiling_usd
         self._now = now or (lambda: datetime.now(HK))
 
+    @property
+    def ceiling_usd(self) -> float:
+        return self._ceiling
+
     def month_cost(self) -> float:
         start, end = _month_bounds(self._now().astimezone(HK))
         return self._store.cost_between(start, end)
