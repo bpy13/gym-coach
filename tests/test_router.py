@@ -104,3 +104,17 @@ def test_question_gets_model_answer(store):
 def test_unusable_report_asks_again(store):
     router, _ = make(store, [intent("report", sets=[])])
     assert "could not find any sets" in router.handle("did some stuff")
+
+
+def test_propose_command_stores_proposed_week(store):
+    days = ("2026-11-23", "2026-11-25", "2026-11-27")
+    sessions = [{"date": d, "kind": "strength", "exercises": [{**EX, "equipment": "Chest press"}]}
+                for d in days]
+    sessions.append({"date": "2026-11-24", "kind": "cardio", "exercises": []})
+    router, fake = make(store, [json.dumps({"message": "Here is your week.",
+                                            "sessions": sessions})])
+    reply = router.handle("/propose")
+    assert "Here is your week." in reply
+    rows = store.plan_sessions("2026-11-23", "2026-11-29")
+    assert len(rows) == 4 and {r["status"] for r in rows} == {"proposed"}
+    assert len(fake.calls) == 1 and fake.calls[0]["model"] == "claude-opus-5-5"

@@ -57,6 +57,8 @@ class Router:
             return HELP
         if command == "/today":
             return self._today_text()
+        if command == "/propose":
+            return self._propose()
         if command == "/progress":
             return "Progress numbers are coming soon."
         if command == "/cost":
@@ -78,9 +80,7 @@ class Router:
         if intent == "approve":
             return self._approve()
         if intent == "change_plan":
-            week = self._proposal_week() or self._next_monday()
-            return planner.propose(self.claude, self.store, self.coach, week,
-                                   change=data.get("change") or text, **self._planner_kw)
+            return self._propose(data.get("change") or text)
         if intent == "skip":
             if not self.store.plan_session(day):
                 return "There is no session planned today."
@@ -89,6 +89,12 @@ class Router:
         if intent in ("body", "progress"):
             return "That is coming soon."
         return self._answer(text)
+
+    def _propose(self, change: str | None = None) -> str:
+        """Propose (or revise) the plan for the proposed week, else for next week."""
+        week = self._proposal_week() or self._next_monday()
+        return planner.propose(self.claude, self.store, self.coach, week,
+                               change=change, **self._planner_kw)
 
     def _next_monday(self) -> date:
         today = self._today()
