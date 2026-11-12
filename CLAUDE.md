@@ -18,10 +18,11 @@ Read these before substantial changes:
 
 ## Environment
 - Python 3.12, conda env `gym-coach` (python-env skill).
-- Install: <set by plan Task 1>
-- Run: <set by plan Task 1>
-- Tests: <set by plan Task 1>
-- Lint: <set by plan Task 1>
+- Install: `conda env create -f environment.yml`, then
+  `conda run -n gym-coach pip install -e ".[dev]"`
+- Run: `conda run -n gym-coach python -m gym_coach` (the program itself comes with plan Task 9)
+- Tests: `conda run -n gym-coach python -m pytest -q`
+- Lint: `conda run -n gym-coach ruff check .`
 
 ## Project rules
 - The repo is public. Personal data never goes into git: workout logs, body measurements,
