@@ -81,7 +81,7 @@ def test_run_forever_pauses_after_error(store):
 
 def test_check_names_missing_key(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    for k in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USER_ID", "ANTHROPIC_API_KEY"):
+    for k in ("TELEGRAM_BOT_TOKEN", "ANTHROPIC_API_KEY"):
         monkeypatch.delenv(k, raising=False)
     assert entry.main(["--check"]) == 1
     assert "TELEGRAM_BOT_TOKEN" in capsys.readouterr().out
@@ -94,3 +94,12 @@ def test_check_ok(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     assert entry.main(["--check"]) == 0
     assert "config ok" in capsys.readouterr().out
+
+
+def test_check_owner_not_paired(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "t")
+    monkeypatch.setenv("TELEGRAM_ALLOWED_USER_ID", "")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    assert entry.main(["--check"]) == 0
+    assert "config ok (owner not paired yet)" in capsys.readouterr().out

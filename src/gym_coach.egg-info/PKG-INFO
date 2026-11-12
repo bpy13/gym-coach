@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: gym-coach
+Version: 0.1.0
+Summary: A personal gym coach as a Telegram chat bot
+Requires-Python: >=3.12
+Requires-Dist: anthropic>=0.40
+Requires-Dist: httpx>=0.27
+Provides-Extra: dev
+Requires-Dist: pytest>=8; extra == "dev"
+Requires-Dist: ruff>=0.6; extra == "dev"

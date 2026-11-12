@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-REQUIRED = ("TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USER_ID", "ANTHROPIC_API_KEY")
+REQUIRED = ("TELEGRAM_BOT_TOKEN", "ANTHROPIC_API_KEY")
 
 
 class ConfigError(Exception):
@@ -14,8 +14,8 @@ class ConfigError(Exception):
 @dataclass(frozen=True)
 class Config:
     telegram_bot_token: str
-    telegram_allowed_user_id: int
     anthropic_api_key: str
+    telegram_allowed_user_id: int | None = None  # None: first sender pairs
     monthly_ceiling_usd: float = 5.0
     session_time: str = "07:00"
     review_time: str = "20:00"
@@ -55,10 +55,13 @@ def load_config(env_path: Path | str = ".env", environ: dict[str, str] | None = 
         if not values.get(key, "").strip():
             raise ConfigError(f"Missing setting {key}: add it to .env")
 
-    try:
-        user_id = int(values["TELEGRAM_ALLOWED_USER_ID"])
-    except ValueError:
-        raise ConfigError("TELEGRAM_ALLOWED_USER_ID must be a whole number") from None
+    user_id = None
+    raw_id = values.get("TELEGRAM_ALLOWED_USER_ID", "").strip()
+    if raw_id:
+        try:
+            user_id = int(raw_id)
+        except ValueError:
+            raise ConfigError("TELEGRAM_ALLOWED_USER_ID must be a whole number") from None
     try:
         ceiling = float(values.get("MONTHLY_CEILING_USD", "5"))
     except ValueError:

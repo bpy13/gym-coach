@@ -17,3 +17,4 @@
 - Task 7, message router and report logging (`router.py`, `reports.py`): done 2026-11-13 (slot 1). 62 tests pass, ruff clean.
 - Task 8, daily session message and scheduler (`scheduler.py`, `messages.py`): done 2026-11-13 (slot 1). 72 tests pass, ruff clean.
 - Task 9, main program and logon start (`app.py`, `__main__.py`, `scripts\`): done 2026-11-13 (slot 1). 79 tests pass, ruff clean. Logon task not registered: Brian runs `scripts\install-logon-task.ps1` himself.
+- Task 9a, bot pairs with the first private sender (`telegram.py`, `config.py`): done 2026-11-13 (slot 1). 83 tests pass, ruff clean; `--check` prints "config ok (owner not paired yet)".

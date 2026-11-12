@@ -13,6 +13,7 @@ MAX_MESSAGE_CHARS = 4000
 MAX_PHOTO_EDGE = 1280
 POLL_TIMEOUT_S = 50
 RETRY_PAUSE_S = 5.0
+PAIRED_REPLY = "Paired with this account. I will answer only you."
 
 
 class TelegramError(Exception):
@@ -58,14 +59,16 @@ class TelegramClient:
     def __init__(
         self,
         token: str,
-        allowed_user_id: int,
+        allowed_user_id: int | None,
         *,
+        on_pair: Callable[[int], None] | None = None,
         client: httpx.Client | None = None,
         sleep: Callable[[float], None] = time.sleep,
         offset: int | None = None,
     ) -> None:
         self._token = token
-        self._allowed = allowed_user_id
+        self._allowed = allowed_user_id  # None until the first private message pairs
+        self._on_pair = on_pair
         self._http = client or httpx.Client(timeout=POLL_TIMEOUT_S + 10)
         self._sleep = sleep
         self.offset = offset  # next update_id to ask for; the caller may persist it
@@ -100,7 +103,17 @@ class TelegramClient:
         for upd in raw:
             self.offset = upd["update_id"] + 1
             msg = upd.get("message")
-            if not msg or msg.get("from", {}).get("id") != self._allowed:
+            if not msg:
+                continue
+            sender = msg.get("from", {}).get("id")
+            if (self._allowed is None and sender is not None
+                    and msg.get("chat", {}).get("type") == "private"):
+                self._allowed = sender
+                if self._on_pair:
+                    self._on_pair(sender)
+                log.info("owner paired")
+                self.send_message(msg["chat"]["id"], PAIRED_REPLY)
+            if sender is None or sender != self._allowed:
                 continue
             out.append(
                 Incoming(

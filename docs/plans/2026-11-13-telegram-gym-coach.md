@@ -181,7 +181,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     `data\`). On first `/start` with no plan, the bot runs Task 6's proposal. Do not use
     `-ExecutionPolicy Bypass`.
 
-- [ ] **Task 9a: the bot learns Brian's user number on first message** needs: Task 9 (slot 1 only) (taken: slot 1, 2026-11-13 12:00)
+- [x] **Task 9a: the bot learns Brian's user number on first message** needs: Task 9 (slot 1 only)
   - Brian, 2026-11-13: "ok" (to the orchestrator's question: the bot saves the first sender's Telegram user number instead of Brian copying it into `.env`; Default accepted).
   - Files: modify `src\gym_coach\config.py`, `src\gym_coach\router.py` (or `app.py`, wherever updates are filtered), their tests, `README.md`, `.env.example`.
   - What: `TELEGRAM_ALLOWED_USER_ID` becomes optional. If it is set, it wins. If it is empty and no owner is stored, the first private-chat message's sender number is stored in `kv` as the owner, the bot replies "Paired with this account. I will answer only you.", and logs "owner paired" (never the number at INFO). From then on every update from another sender is ignored, exactly as with the `.env` value. Group chats never pair. `--check` prints "config ok (owner not paired yet)" when no owner is set or stored. Never write the number into any committed file.

@@ -113,3 +113,50 @@ def test_download_file_returns_bytes():
 
     tg, _ = make(handler)
     assert tg.download_file("f") == b"JPEGDATA"
+
+
+def _private(uid, user, text="t"):
+    return {"update_id": uid, "message": {
+        "from": {"id": user}, "chat": {"id": user, "type": "private"}, "text": text}}
+
+
+def _client(handler, owner, paired):
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    return TelegramClient(TOKEN, owner, client=http, on_pair=paired.append)
+
+
+def test_pairing_first_private_sender_then_others_ignored():
+    sent = []
+
+    def handler(req):
+        body = json.loads(req.read())
+        if req.url.path.endswith("sendMessage"):
+            sent.append(body["text"])
+            return httpx.Response(200, json={"ok": True, "result": {}})
+        grp = {"update_id": 1, "message": {"from": {"id": 7}, "chat": {"id": -5, "type": "group"},
+                                           "text": "g"}}
+        return httpx.Response(200, json={"ok": True,
+                                         "result": [grp, _private(2, 11), _private(3, 12)]})
+
+    paired = []
+    got = _client(handler, None, paired).get_updates()
+    assert paired == [11]
+    assert [u.update_id for u in got] == [2]
+    assert sent == ["Paired with this account. I will answer only you."]
+
+
+def test_group_message_never_pairs():
+    def handler(req):
+        m = {"from": {"id": 7}, "chat": {"id": -5, "type": "group"}, "text": "g"}
+        return httpx.Response(200, json={"ok": True, "result": [{"update_id": 1, "message": m}]})
+
+    paired = []
+    assert _client(handler, None, paired).get_updates() == [] and paired == []
+
+
+def test_set_owner_overrides_pairing():
+    def handler(req):
+        return httpx.Response(200, json={"ok": True, "result": [_private(1, 7)]})
+
+    paired = []
+    assert _client(handler, ME, paired).get_updates() == [] and paired == []

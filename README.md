@@ -7,8 +7,10 @@ It answers only the one Telegram account you allow.
 ## Setup
 1. `conda env create -f environment.yml`
 2. `conda run -n gym-coach pip install -e ".[dev]"`
-3. Copy `.env.example` to `.env` and fill in `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_ID`
-   and `ANTHROPIC_API_KEY`. Never commit `.env`.
+3. Copy `.env.example` to `.env` and fill in `TELEGRAM_BOT_TOKEN` and `ANTHROPIC_API_KEY`.
+   Leave `TELEGRAM_ALLOWED_USER_ID` empty: the first private message the bot receives pairs it
+   with that account (it answers only that account afterwards). Set the number to override.
+   Never commit `.env`.
 4. Put your own profile and equipment lists in `data\profile.md` and `data\equipment.md`
    (same layout as the made-up files in `examples\`). `data\` is git-ignored.
 

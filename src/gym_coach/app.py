@@ -124,7 +124,11 @@ def build(config: Config) -> tuple[App, Scheduler, Store]:
     claude = Claude(anthropic.Anthropic(api_key=config.anthropic_api_key), store,
                     config.monthly_ceiling_usd)
     router = Router(store, claude, config.model_fast, config.model_coach)
-    telegram = TelegramClient(config.telegram_bot_token, config.telegram_allowed_user_id)
+    owner = config.telegram_allowed_user_id
+    if owner is None and store.get("owner_id"):
+        owner = int(store.get("owner_id"))
+    telegram = TelegramClient(config.telegram_bot_token, owner,
+                              on_pair=lambda uid: store.set("owner_id", str(uid)))
     app = App(telegram, router, store)
     scheduler = Scheduler(store, app.send_to_owner, config.session_time, config.timezone)
     return app, scheduler, store

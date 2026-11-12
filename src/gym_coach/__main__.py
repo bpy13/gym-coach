@@ -5,6 +5,20 @@ import sys
 from gym_coach.config import ConfigError, load_config
 
 
+def _stored_owner(config) -> bool:
+    from pathlib import Path
+
+    from gym_coach.store import Store
+    db = Path(config.data_dir) / "gym.db"
+    if not db.exists():
+        return False
+    store = Store(db)
+    try:
+        return bool(store.get("owner_id"))
+    finally:
+        store.close()
+
+
 def main(argv: list[str]) -> int:
     try:
         config = load_config()
@@ -12,7 +26,10 @@ def main(argv: list[str]) -> int:
         print(exc)
         return 1
     if "--check" in argv:
-        print("config ok")
+        if config.telegram_allowed_user_id is None and not _stored_owner(config):
+            print("config ok (owner not paired yet)")
+        else:
+            print("config ok")
         return 0
     from gym_coach import app
     try:

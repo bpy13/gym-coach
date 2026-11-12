@@ -36,7 +36,7 @@ def test_overrides_comments_and_quotes(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "key", ["TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USER_ID", "ANTHROPIC_API_KEY"]
+    "key", ["TELEGRAM_BOT_TOKEN", "ANTHROPIC_API_KEY"]
 )
 def test_missing_secret_names_key_not_values(tmp_path, key):
     text = "".join(line + "\n" for line in SECRETS.splitlines() if not line.startswith(key))
@@ -65,3 +65,9 @@ def test_environment_overrides_file(tmp_path):
 def test_repr_hides_secrets(tmp_path):
     cfg = load_config(write_env(tmp_path, SECRETS), environ={})
     assert "tok-123" not in repr(cfg) and "key-abc" not in repr(cfg)
+
+
+def test_user_id_is_optional(tmp_path):
+    lines = [ln for ln in SECRETS.splitlines() if not ln.startswith("TELEGRAM_ALLOWED")]
+    cfg = load_config(write_env(tmp_path, "\n".join(lines) + "\n"), environ={})
+    assert cfg.telegram_allowed_user_id is None
