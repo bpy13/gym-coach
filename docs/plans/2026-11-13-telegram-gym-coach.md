@@ -156,7 +156,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     gets a short answer from the fast model with the profile and today's session as context.
     Handlers for `body` and `progress` are stubs here ("coming soon"); Tasks 14 and 17 fill them.
 
-- [ ] **Task 8: daily session message and scheduler** needs: Task 7
+- [ ] **Task 8: daily session message and scheduler** needs: Task 7 (taken: slot 1, 2026-11-13 12:00)
   - Files: create `src\gym_coach\scheduler.py`, `src\gym_coach\messages.py`,
     `tests\test_scheduler.py`.
   - Done when: `pytest tests\test_scheduler.py -q` passes with a fake clock: at 07:00 on a day

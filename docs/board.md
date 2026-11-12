@@ -1,6 +1,7 @@
 # Board: gym-coach
 
 ## Workers
+- slot 1: Task 8, daily session message and scheduler (building)
 
 ## Ready to build
 
