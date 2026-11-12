@@ -117,7 +117,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     from the response's `usage`. One function for text, one for text plus one JPEG image.
     Structured answers: ask for JSON and parse it; on a parse failure retry once, then raise.
 
-- [ ] **Task 5: gym for the day and coach context** needs: Task 1 `[parallel-ok]`
+- [ ] **Task 5: gym for the day and coach context** needs: Task 1 `[parallel-ok]` (taken: slot 3, 2026-11-13 12:10)
   - Files: create `src\gym_coach\context.py`, `tests\test_context.py`.
   - Done when: `pytest tests\test_context.py -q` passes: Monday–Friday dates give `home`,
     Saturday–Sunday give `parents` (Hong Kong time); the equipment list for each gym parses from
