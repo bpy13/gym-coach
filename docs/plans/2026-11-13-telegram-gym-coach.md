@@ -220,6 +220,12 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
   - What: images stay out of git (in `data\`, ignored); fetch only the images of exercises in the allowed list, not the whole database. Machine exercises keep Brian's own photo (Task 9e). Caption = exercise name plus one short form cue from the database's instructions.
   - Done when: tests with fakes show a dumbbell exercise sent with its two images and a machine exercise with the machine photo; an exercise not in the database still sends text; `pytest -q` and `ruff check .` pass; pushed. Do not start or stop the real bot.
 
+- [ ] **Task 9g: the scheduler thread crashes on the database every minute** needs: Task 9f (slot 1 only)
+  - Found by the orchestrator, 2026-11-13, in `data\bot.log`: every scheduler tick fails with `sqlite3.ProgrammingError: SQLite objects created in a thread can only be used in that same thread` (scheduler.py `_send_session` -> store.py `get`). `app.py` runs `scheduler.run` in a thread but shares the Store made in the main thread. So the 07:00 session message can never be sent.
+  - Files: `src\gym_coach\store.py` and/or `src\gym_coach\app.py`, `src\gym_coach\scheduler.py`, their tests.
+  - What: make database use from the scheduler thread safe (for example one connection with `check_same_thread=False` guarded by a lock, or a separate Store for the thread). Pick the smaller change; no data loss, no schema change.
+  - Done when: a new test runs a scheduler tick in a real second thread against a real Store file and it sends the session message (FakeTelegram); `pytest -q` and `ruff check .` pass; pushed. Do not start or stop the real bot.
+
 - [x] **Task 10: Brian creates the Telegram bot and fills `.env`** (ticked 2026-11-13 by the orchestrator: Brian, "API keys added"; the orchestrator saw TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY set without reading them; TELEGRAM_ALLOWED_USER_ID stays empty by decision, see Task 9a)
   - Files: `.env` (never committed).
   - Done when: `python -m gym_coach --check` prints "config ok" on slot 1.
