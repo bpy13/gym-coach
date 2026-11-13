@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from pathlib import Path
 
 _SCHEMA = """
@@ -31,19 +32,23 @@ class Store:
     def __init__(self, path: str | Path):
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        self._db = sqlite3.connect(str(path))
+        # One connection shared by the main and scheduler threads; the lock serialises use.
+        self._lock = threading.RLock()
+        self._db = sqlite3.connect(str(path), check_same_thread=False)
         self._db.row_factory = sqlite3.Row
         self._db.executescript(_SCHEMA)
         self._db.commit()
 
     def close(self) -> None:
-        self._db.close()
+        with self._lock:
+            self._db.close()
 
     def _rows(self, sql: str, args: tuple = ()) -> list[dict]:
-        return [dict(r) for r in self._db.execute(sql, args).fetchall()]
+        with self._lock:
+            return [dict(r) for r in self._db.execute(sql, args).fetchall()]
 
     def _run(self, sql: str, args: tuple = ()) -> None:
-        with self._db:
+        with self._lock, self._db:
             self._db.execute(sql, args)
 
     # plan sessions
@@ -120,15 +125,18 @@ class Store:
 
     def cost_between(self, start, end) -> float:
         """Total cost for timestamps >= start and < end (ISO strings)."""
-        row = self._db.execute(
-            "SELECT COALESCE(SUM(cost_usd),0) FROM api_calls WHERE timestamp>=? AND timestamp<?",
-            (start, end),
-        ).fetchone()
+        with self._lock:
+            row = self._db.execute(
+                "SELECT COALESCE(SUM(cost_usd),0) FROM api_calls"
+                " WHERE timestamp>=? AND timestamp<?",
+                (start, end),
+            ).fetchone()
         return float(row[0])
 
     # kv
     def get(self, key, default=None):
-        row = self._db.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+        with self._lock:
+            row = self._db.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
         return row[0] if row else default
 
     def set(self, key, value) -> None:

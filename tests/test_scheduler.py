@@ -102,3 +102,27 @@ def test_marker_survives_restart(store):
     sch2, sent2 = make(store, Clock(2026, 11, 17, 12, 0))
     sch2.tick()
     assert sent2 == []
+
+
+def test_tick_in_second_thread_sends_session(tmp_path):
+    import threading
+
+    store = Store(tmp_path / "thread.db")  # created in this (main) thread
+    try:
+        store.add_plan_session("2026-11-17", "home", "strength", "approved", EXERCISES)
+        sch, sent = make(store, Clock(2026, 11, 17, 7, 0))
+        errors = []
+
+        def work():
+            try:
+                sch.tick()
+            except Exception as e:  # noqa: BLE001
+                errors.append(e)
+
+        t = threading.Thread(target=work)
+        t.start()
+        t.join()
+        assert errors == []
+        assert len(sent) == 1
+    finally:
+        store.close()
