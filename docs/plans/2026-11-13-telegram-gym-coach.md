@@ -284,7 +284,7 @@ still wait for Task 11.
     91" stores one `body` row; a weight more than 5 kg from the last one is questioned before it
     is stored.
 
-- [ ] **Task 15: ceiling check end to end** needs: Task 13 `[parallel-ok]` (beside earlier phases)
+- [ ] **Task 15: ceiling check end to end** needs: Task 13 `[parallel-ok]` (beside earlier phases) (taken: slot 2, 2026-11-16 15:00)
   - Files: create `tests\test_ceiling_e2e.py`.
   - Done when: the test seeds `api_calls` to US$5.00 for the month, sends a photo and a report
     through the router with the fakes, and asserts that no model call happens and both replies
