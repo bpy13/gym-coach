@@ -256,6 +256,28 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     has no ids. Tests and ruff pass. The bot runs the new code and its log is clean.
   - Done 2026-11-16 (slot 1): code matches names to the catalogue, asks the model once for the rest (`planner.ensure_pictures`); ids added to the stored sessions of 18 and 20 Nov (17 and 19 are cardio) with `scriptsdd_illustration_ids.py`, nothing else changed. `session_album` on the real database, images per exercise: Wed 18 Nov [2, 2, 2, 1, 2, 1]; Fri 20 Nov [2, 1, 1, 1, 1, 2]. 136 tests pass, ruff clean.
   - Step 3 not done: the auto-mode check refused `Stop-ScheduledTask`/`Start-ScheduledTask gym-coach-bot` (2026-11-16). Brian restarts the bot; the orchestrator checks `dataot.log` for a new "bot started" line and no error.
+- [ ] **Task 9j: strength days are Tuesday, Thursday (home) and Sunday (parents' gym)** (slot 1 only) (beside earlier phases)
+  - Brian, 2026-11-16: "I'd like to spend a session on Sunday", "yes parents' gym" and
+    "do Tue, Thu, Sun" (decisions.md). This replaces Monday, Wednesday, Friday.
+  - Do: (1) Find where the weekly pattern is set (the plan prompt and any day rule in
+    `planner.py`, the settings, `docs/milestones.md` line "home Monday-Friday, parents'
+    Saturday-Sunday") and make it: strength on Tuesday and Thursday at the home gym and on
+    Sunday at his parents' gym; no other strength day. A day holds one session, so a strength
+    day has no cardio row. Cardio days are not decided yet (asked 16 Nov): keep cardio off
+    Tuesday, Thursday and Sunday and leave the other days as the code has them. (2) Sunday's
+    session uses what only the parents' gym has (decisions.md and the equipment list name it:
+    leg press, Smith machine, fly machine) for muscles the home gym trains poorly. (3) Replace
+    the stored sessions from 17 Nov to 22 Nov on the real `data\gym.db` with a new proposal on
+    this pattern (one paid call, well under the US$10 allowance; put the real cost on the board);
+    every strength exercise carries its picture (Task 9i). Leave the status "proposed": Brian
+    approves the week with the orchestrator, who then asks for the status change. (4) Restart
+    the bot through its scheduled task if code it loads changed; if the restart is refused, say
+    so in the ENDED message and stop there.
+  - Done when: on the real database, 17 and 19 Nov are strength at home, 22 Nov is strength at
+    parents' with at least one exercise on equipment the home gym lacks, no strength row on
+    another day from 17 to 22 Nov, every strength exercise has a picture (count them with
+    `session_album`), tests pass, and `dataot.log` shows no new error after the last start.
+    Send the orchestrator the new sessions' dates, gyms and exercise names in the ENDED message.
 
 - [x] **Task 10: Brian creates the Telegram bot and fills `.env`** (ticked 2026-11-13 by the orchestrator: Brian, "API keys added"; the orchestrator saw TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY set without reading them; TELEGRAM_ALLOWED_USER_ID stays empty by decision, see Task 9a)
   - Files: `.env` (never committed).
