@@ -1,6 +1,7 @@
 # Board: gym-coach
 
 ## Workers
+- slot 1: Task 9k, one message per exercise (building)
 
 ## Ready to build
 

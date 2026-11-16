@@ -278,7 +278,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     another day from 17 to 22 Nov, every strength exercise has a picture (count them with
     `session_album`), tests pass, and `databot.log` shows no new error after the last start.
     Send the orchestrator the new sessions' dates, gyms and exercise names in the ENDED message.
-- [ ] **Task 9k: one Telegram message per exercise: machine photo, illustration and the task together** `[parallel-ok]` (slot 1 only) (beside earlier phases)
+- [ ] **Task 9k: one Telegram message per exercise: machine photo, illustration and the task together** `[parallel-ok]` (slot 1 only) (beside earlier phases) (taken: slot 1, 2026-11-16 17:00)
   - Brian, 2026-11-16, on seeing a mock-up of the 18 Nov session (one text message, then one
     album of ten pictures): "(should be image + illustration + task) as one message. So if 5
     task on gym, like on Tuesday, 5 messages should be sent" (decisions.md).
