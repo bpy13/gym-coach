@@ -233,7 +233,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
   - What: restart through the scheduled task only: `Stop-ScheduledTask gym-coach-bot`, confirm no `pythonw` process runs `-m gym_coach`, then `Start-ScheduledTask gym-coach-bot`. Never start the bot as the worker's own child process: run-worker stops the worker's children when the run ends.
   - Done when: after the restart one `pythonw -m gym_coach` process runs with a start time after the restart; after at least 3 minutes `data\bot.log` shows no new "SQLite objects created in a thread" line (count before and after) and no new traceback; the bot process is still running when the worker hands back. Report the counts in the tick note.
 
-- [ ] **Task 9i: every exercise in a session message gets a picture** (slot 1 only) (waiting: Brian restarts the bot; orchestrator checks bot.log)
+- [x] **Task 9i: every exercise in a session message gets a picture** (slot 1 only) (bot restarted 16:07 on 16 Nov after the code change; bot.log shows a clean start and no new error; orchestrator checked, and rendered 18 Nov with 10 pictures for 6 exercises, 20 Nov with 8 for 6)
   - Brian, 2026-11-16: "shouldn't the gym bot also send illustration?" and "I've requested an image
     or an illustration for each of the workout task" (decisions of 2026-11-13, Tasks 9e and 9f).
   - Symptom (checked by the orchestrator on the real `data\gym.db`, 2026-11-16): no exercise in
