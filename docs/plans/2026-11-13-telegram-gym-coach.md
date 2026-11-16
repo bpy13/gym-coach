@@ -290,7 +290,7 @@ still wait for Task 11.
     through the router with the fakes, and asserts that no model call happens and both replies
     state the limit; `/cost` still works.
 
-- [ ] **Task 16: live check of meals** needs: Task 13, Task 14 (slot 1 only) (checkpoint) (taken: slot 1, 2026-11-16 15:31)
+- [ ] **Task 16: live check of meals** needs: Task 13, Task 14 (slot 1 only) (checkpoint) (restart: no live worker held it on 2026-11-16 15:36)
   - Done when: Brian sends one real meal photo and gets an estimate and a daily total; the
     month's cost in `/cost` rose by less than US$0.01 for that photo; the card asks Brian
     whether the estimate looked reasonable.
