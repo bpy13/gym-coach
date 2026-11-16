@@ -409,7 +409,7 @@ still wait for Task 11.
     through the router with the fakes, and asserts that no model call happens and both replies
     state the limit; `/cost` still works.
 
-- [ ] **Task 14b: the weekly check-in asks for weight only** `[parallel-ok]` (waiting: bot restart refused by the auto-mode check 2026-11-17; code and tests done, slot 1, 148 tests and ruff pass; orchestrator or Brian restarts gym-coach-bot and checks data/bot.log for "bot started" and no error after)
+- [x] **Task 14b: the weekly check-in asks for weight only** `[parallel-ok]` (Brian restarted the bot; log: "bot started" 2026-11-17 00:41, after the code commits of 00:26 and 00:35, no error after except Telegram connection retries; checked by the orchestrator)
   - Files: modify `src\gym_coach\scheduler.py` (the Monday prompt), `src\gym_coach\router.py`
     (the "did not catch your weight" reply and the router prompt's wording), `tests\test_body.py`.
   - Done when: tests pass: the Monday 07:00 prompt and the "did not catch" reply name body weight
@@ -420,7 +420,7 @@ still wait for Task 11.
   - Notes: Brian, 2026-11-17: "gym: drop it" (the waist question). No change to the database
     schema and no stored row is removed.
 
-- [ ] **Task 14c: exercise messages without the form tip** `[parallel-ok]` (waiting: bot restart refused by the auto-mode check 2026-11-17; code and tests done, slot 1, 150 tests and ruff pass; orchestrator or Brian restarts gym-coach-bot together with Task 14b and checks data/bot.log for "bot started" and no error after)
+- [x] **Task 14c: exercise messages without the form tip** `[parallel-ok]` (Brian restarted the bot; log: "bot started" 2026-11-17 00:41, after the code commits of 00:26 and 00:35, no error after except Telegram connection retries; checked by the orchestrator)
   - Files: the module that builds each exercise message caption (find the form cue that is cut at
     about 150 characters) and its tests.
   - Done when: tests pass: an exercise message caption holds the task line (name, sets, reps,
