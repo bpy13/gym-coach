@@ -241,7 +241,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     API key; set a US$5 monthly spend limit in the Anthropic Console; paste the three values
     into `.env`.
 
-- [ ] **Task 11: live check with the real bot** needs: Task 9, Task 9a, Task 9b, Task 9c, Task 10 (slot 1 only) (checkpoint) (orchestrator, 2026-11-16: Brian sent /start on 13 Nov; the database holds his owner number, 5 proposed sessions for 16 to 20 Nov and 7 model calls costing US$0.07. The bot runs from the scheduled task since 14:45 today. Run the rest of the live check now; the sessions are still "proposed", so the card asks Brian to approve the schedule in the chat)
+- [ ] **Task 11: live check with the real bot** needs: Task 9, Task 9a, Task 9b, Task 9c, Task 10 (slot 1 only) (checkpoint) (orchestrator, 2026-11-16: Brian sent /start on 13 Nov; the database holds his owner number, 5 proposed sessions for 16 to 20 Nov and 7 model calls costing US$0.07. The bot runs from the scheduled task since 14:45 today. Run the rest of the live check now; the sessions are still "proposed", so the card asks Brian to approve the schedule in the chat) (taken: slot 1, 2026-11-16 15:10)
   - Files: modify `docs\known-issues.md` (create if needed), `docs\open-items.md` via the report.
   - Done when: with the bot running from the logon task, Brian's `/start` yields a real schedule
     and first-week proposal that uses only equipment in `data\equipment.md`; `/cost` shows a
