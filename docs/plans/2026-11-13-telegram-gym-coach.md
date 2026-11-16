@@ -278,6 +278,37 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     another day from 17 to 22 Nov, every strength exercise has a picture (count them with
     `session_album`), tests pass, and `databot.log` shows no new error after the last start.
     Send the orchestrator the new sessions' dates, gyms and exercise names in the ENDED message.
+- [ ] **Task 9k: one Telegram message per exercise: machine photo, illustration and the task together** (slot 1 only) (beside earlier phases)
+  - Brian, 2026-11-16, on seeing a mock-up of the 18 Nov session (one text message, then one
+    album of ten pictures): "(should be image + illustration + task) as one message. So if 5
+    task on gym, like on Tuesday, 5 messages should be sent" (decisions.md).
+  - Symptoms (checked by the orchestrator, 2026-11-16): (a) `telegram.py` `send_album` sends one
+    media group with a caption on several items; Telegram shows no caption under such an album,
+    so the pictures arrive with no name. (b) A machine exercise gets only Brian's machine photo
+    and no illustration of the movement. (c) "Dumbbell lateral raise" on the old 18 Nov session
+    got the illustration of a one-arm raise lying sideways on an incline bench: the name match
+    in Task 9i picked the wrong catalogue entry.
+  - Do: (1) A strength session goes out as one short header message (gym and date), then one
+    message per exercise, in order: that exercise's pictures (Brian's photo of the machine when
+    the exercise uses one of his machines, and the illustration of the movement when the
+    catalogue has one; both when both exist) with ONE caption under them: the name, sets x reps
+    at weight, and the form cue. In a media group put the caption on the first item only and
+    leave the others empty, so Telegram shows it; a single picture goes as a photo with the
+    caption; an exercise with no picture at all goes as text and is logged. Then the closing
+    line asking what he did. Cardio stays one text message. (2) Machine exercises get an
+    illustration id too, where the catalogue has the movement (same rule as Task 9i: code
+    matches, the model is asked once, what stays without is logged); add the ids to the stored
+    sessions from 17 to 22 Nov and change nothing else in them. (3) Make the name match safer:
+    a match must agree on the equipment and the body position (standing, seated, lying), and
+    list in the ENDED message every stored exercise with the catalogue entry it got, so the
+    orchestrator can look at each picture. (4) Restart the bot through its scheduled task; if
+    the restart is refused, say so in the ENDED message and stop there.
+  - Done when: for each strength session from 17 to 22 Nov on the real `data\gym.db`, the
+    number of messages the bot would send is the number of exercises plus two (header and
+    closing line), each exercise message has exactly one caption and it names the exercise with
+    its sets, reps and weight; every exercise has at least one picture; tests cover the caption
+    rule; and after the last start `data\bot.log` shows no new error. Do not send anything to
+    Brian's chat as a test.
 
 - [x] **Task 10: Brian creates the Telegram bot and fills `.env`** (ticked 2026-11-13 by the orchestrator: Brian, "API keys added"; the orchestrator saw TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY set without reading them; TELEGRAM_ALLOWED_USER_ID stays empty by decision, see Task 9a)
   - Files: `.env` (never committed).
