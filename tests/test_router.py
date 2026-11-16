@@ -107,10 +107,10 @@ def test_unusable_report_asks_again(store):
 
 
 def test_propose_command_stores_proposed_week(store):
-    days = ("2026-11-23", "2026-11-25", "2026-11-27")
+    days = ("2026-11-24", "2026-11-26", "2026-11-29")
     sessions = [{"date": d, "kind": "strength", "exercises": [{**EX, "equipment": "Chest press"}]}
                 for d in days]
-    sessions.append({"date": "2026-11-24", "kind": "cardio", "exercises": []})
+    sessions.append({"date": "2026-11-25", "kind": "cardio", "exercises": []})
     router, fake = make(store, [json.dumps({"message": "Here is your week.",
                                             "sessions": sessions})])
     reply = router.handle("/propose")

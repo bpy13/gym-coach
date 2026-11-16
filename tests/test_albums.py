@@ -146,10 +146,10 @@ def test_proposal_message_lists_every_day():
 def test_proposal_sends_album_for_first_session_then_full_text(store, setup):
     eq, photos = setup
     now = datetime(2026, 11, 17, 18, 0, tzinfo=HK)
-    days = ("2026-11-23", "2026-11-25", "2026-11-27")
+    days = ("2026-11-24", "2026-11-26", "2026-11-29")
     sessions = [{"date": d, "kind": "strength", "exercises": [ex("Press", "Chest press")]}
                 for d in days]
-    sessions.append({"date": "2026-11-24", "kind": "cardio", "exercises": []})
+    sessions.append({"date": "2026-11-25", "kind": "cardio", "exercises": []})
     fake = FakeClaude([json.dumps({"message": "Your week.", "sessions": sessions})])
     router = Router(store, Claude(fake, store, 5.0, now=lambda: now), "claude-haiku-5-5", "claude-opus-5-5", now=lambda: now,
                     profile_path="examples/profile.md", equipment_path="examples/equipment.md")
@@ -159,7 +159,7 @@ def test_proposal_sends_album_for_first_session_then_full_text(store, setup):
     assert len(tg.albums) == 1 and [c for _, c in tg.albums[0][1]] == ["Press"]
     text = tg.sent[0][1]
     assert "Your week." in text and "Press: 3 x 8-12 at 20 kg" in text
-    assert "Tue 24 Nov: cardio" in text
+    assert "Wed 25 Nov: cardio" in text
     app.handle(Incoming(2, 5, text="/today"))
     assert len(tg.albums) == 1  # only a proposal sends photos
 

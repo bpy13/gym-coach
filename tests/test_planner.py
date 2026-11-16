@@ -13,7 +13,7 @@ MODEL = "claude-opus-5-5"
 WEEK = date(2026, 11, 16)  # Monday
 EQ = "examples/equipment.md"
 PROFILE = "examples/profile.md"
-WEEKDAYS = ("2026-11-16", "2026-11-18", "2026-11-20")
+WEEKDAYS = ("2026-11-17", "2026-11-19", "2026-11-22")
 
 
 @pytest.fixture
@@ -30,7 +30,7 @@ def ex(equipment):
 
 def plan(strength=WEEKDAYS, equipment="Chest press", message="Here is your week."):
     sessions = [{"date": d, "kind": "strength", "exercises": [ex(equipment)]} for d in strength]
-    sessions.append({"date": "2026-11-17", "kind": "cardio", "exercises": []})
+    sessions.append({"date": "2026-11-18", "kind": "cardio", "exercises": []})
     return json.dumps({"message": message, "sessions": sessions})
 
 
@@ -101,8 +101,19 @@ def test_approve(store):
 
 def test_change_request_makes_new_proposal(store):
     run(store, [plan()])
-    moved = plan(strength=("2026-11-16", "2026-11-18", "2026-11-19"))
-    fake, _ = run(store, [moved], change="move Friday to Thursday")
-    assert "move Friday to Thursday" in prompt_of(fake, 0) and "2026-11-20" in prompt_of(fake, 0)
+    moved = plan(message="Moved the cardio.").replace("2026-11-18", "2026-11-20")
+    fake, _ = run(store, [moved], change="move cardio to Friday")
+    assert "move cardio to Friday" in prompt_of(fake, 0) and "2026-11-18" in prompt_of(fake, 0)
     dates = [r["date"] for r in week(store)]
-    assert "2026-11-19" in dates and "2026-11-20" not in dates
+    assert "2026-11-20" in dates and "2026-11-18" not in dates
+
+
+def test_strength_only_on_tuesday_thursday_sunday(store):
+    with pytest.raises(PlanError):
+        run(store, [plan(strength=("2026-11-16", "2026-11-19", "2026-11-22"))] * 2)
+
+
+def test_no_cardio_on_a_strength_day(store):
+    bad = plan().replace("2026-11-18", "2026-11-19")
+    with pytest.raises(PlanError):
+        run(store, [bad] * 2)

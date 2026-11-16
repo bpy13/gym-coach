@@ -147,7 +147,7 @@ def test_album_survives_unreachable_images(gym_files, tmp_path):
 def test_proposal_keeps_only_listed_illustration_ids(ill, tmp_path):
     i, _ = ill
     store = Store(tmp_path / "t.db")
-    days = ("2026-11-16", "2026-11-18", "2026-11-20")
+    days = ("2026-11-17", "2026-11-19", "2026-11-22")
     sessions = [{"date": d, "kind": "strength", "exercises": [
         ex("Squat", "dumbbells on a rack", illustration="Goblet_Squat"),
         ex("Odd", "dumbbells on a rack", illustration="Made_Up")]} for d in days]
@@ -179,8 +179,12 @@ def test_send_album_splits_into_groups_of_ten():
 def _propose(ill, tmp_path, exercises, replies=()):
     i, _ = ill
     store = Store(tmp_path / "t.db")
-    days = ("2026-11-16", "2026-11-18", "2026-11-20")
-    sessions = [{"date": d, "kind": "strength", "exercises": exercises} for d in days]
+    days = ("2026-11-17", "2026-11-19", "2026-11-22")
+    # Sunday is the parents' gym, which has no cable machine: keep cable exercises on home days
+    sessions = [{"date": d, "kind": "strength",
+                 "exercises": exercises if d != "2026-11-22" else
+                 [e for e in exercises if "cable" not in e["equipment"]] or exercises}
+                for d in days]
     fake = FakeClaude([json.dumps({"message": "x", "sessions": sessions}), *replies])
     now = datetime(2026, 11, 13, tzinfo=HK)
     claude = Claude(fake, store, 5.0, now=lambda: now)

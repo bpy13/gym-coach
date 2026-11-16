@@ -19,6 +19,7 @@ from gym_coach.prompts import CARDIO_SENTENCE, PLAN_SYSTEM, plan_prompt
 
 log = logging.getLogger(__name__)
 STRENGTH_PER_WEEK = 3
+STRENGTH_WEEKDAYS = (1, 3, 6)  # Tuesday, Thursday (home), Sunday (parents')
 
 
 class PlanError(Exception):
@@ -48,10 +49,12 @@ def validate(data, dates: list[str], equipment: dict[str, set[str]]) -> list[dic
         gym = gym_for(date.fromisoformat(day))
         exercises = s.get("exercises") or []
         if kind == "cardio":
+            if date.fromisoformat(day).weekday() in STRENGTH_WEEKDAYS:
+                raise PlanError(f"{day} is a strength day: no cardio session on it")
             exercises = []
         else:
-            if date.fromisoformat(day).weekday() == 5:
-                raise PlanError(f"{day} is a Saturday: no late-afternoon strength session")
+            if date.fromisoformat(day).weekday() not in STRENGTH_WEEKDAYS:
+                raise PlanError(f"{day} is not a strength day: strength is Tuesday, Thursday, Sunday")
             if not exercises:
                 raise PlanError(f"strength session on {day} has no exercises")
             for ex in exercises:
