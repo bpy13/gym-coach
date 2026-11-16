@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from gym_coach import meals, planner, reports
+from gym_coach import meals, planner, reports, targets
 from gym_coach.context import DEFAULT_PROFILE, profile_text
 from gym_coach.llm import HK, CeilingReached, LLMError
 from gym_coach.messages import proposal_message
@@ -17,10 +17,15 @@ meal (he says what he ate), meal_correction (he fixes the calories or protein of
 question (anything else).
 Answer JSON: {"intent": "<one intent>", "sets": [{"exercise": "...", "weight_kg": 35,
 "reps": 10, "effort": null}], "change": "<the requested change, for change_plan>",
-"kcal": <number, for meal_correction>, "protein_g": <number or null, for meal_correction>}
+"kcal": <number, for meal_correction>, "protein_g": <number or null, for meal_correction>,
+"weight_kg": <number or null, for body>, "waist_cm": <number or null, for body>}
 "sets" has one entry per set: expand "3x10 at 40 kg" into three entries and "35kg 10 10 8" into
 three entries. For a correction list every set of each exercise he corrects, with the corrected
 values. Use an empty list when there are no sets."""
+
+BODY_JUMP_KG = 5.0
+PENDING_BODY = "pending:body"
+YES = {"yes", "y", "yep", "yeah", "ok", "correct", "right", "confirm"}
 
 HELP = ("Hi! I'm your gym coach. I send the day's session; reply with what you did "
         "(e.g. \"chest press 35 kg 10 10 8\"). Commands: /today, /progress, /cost. "
@@ -76,6 +81,9 @@ class Router:
         if command == "/cost":
             return (f"This month: US${self.claude.month_cost():.2f} "
                     f"of US${self.claude.ceiling_usd:g}.")
+        pending = self._pending_body(text)
+        if pending is not None:
+            return pending
         data = self.claude.json(self.fast, text, system=CLASSIFY_SYSTEM)
         if not isinstance(data, dict):
             data = {}
@@ -109,9 +117,45 @@ class Router:
             if not fixed:
                 return "I could not tell what to correct. Say e.g. \"that was 400 kcal\"."
             return "Corrected the last meal. " + meals.total_line(self.store, day, self._profile())
-        if intent in ("body", "progress"):
+        if intent == "body":
+            return self._body(day, data.get("weight_kg"), data.get("waist_cm"))
+        if intent == "progress":
             return "That is coming soon."
         return self._answer(text)
+
+    def _body(self, day: str, weight, waist) -> str:
+        """Store this week's weight and waist; a weight far from the last one is questioned."""
+        weight = _number(weight)
+        waist = _number(waist)
+        if weight is None:
+            return 'I did not catch your weight. Say e.g. "81.6 kg, waist 91".'
+        last = targets.current_targets(self.store, self._profile()).weight_kg
+        if abs(weight - last) > BODY_JUMP_KG:
+            self.store.set(PENDING_BODY, f"{weight}|{'' if waist is None else waist}")
+            return (f"{weight:g} kg is {abs(weight - last):.1f} kg "
+                    f"{'above' if weight > last else 'below'} your last weight ({last:g} kg). "
+                    "Is that right? Reply yes to save it, or send the right number.")
+        return self._save_body(day, weight, waist)
+
+    def _save_body(self, day: str, weight: float, waist: float | None) -> str:
+        self.store.set(PENDING_BODY, "")
+        self.store.add_body(day, weight, waist)
+        waist_part = "" if waist is None else f", waist {waist:g} cm"
+        t = targets.current_targets(self.store, self._profile())
+        return (f"Saved: {weight:g} kg{waist_part}. Daily targets now {t.kcal:,} kcal "
+                f"and {t.protein_g} g protein.")
+
+    def _pending_body(self, text: str) -> str | None:
+        """Answer to the question about a far-off weight: yes saves it, anything else drops it."""
+        value = self.store.get(PENDING_BODY)
+        if not value:
+            return None
+        self.store.set(PENDING_BODY, "")
+        if text.lower().strip(" .!") not in YES:
+            return None  # a new message: classify it normally
+        weight, _, waist = value.partition("|")
+        return self._save_body(self._today().isoformat(), float(weight),
+                               float(waist) if waist else None)
 
     def _profile(self):
         return self._profile_path or DEFAULT_PROFILE
@@ -176,3 +220,9 @@ class Router:
             self.fast, prompt,
             system="You are a concise gym coach. Answer in at most 5 sentences. General fitness "
                    "guidance, not medical advice.")
+
+
+def _number(value) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value) if value > 0 else None

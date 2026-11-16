@@ -31,6 +31,16 @@ class Scheduler:
         now = self._now().astimezone(self._tz)
         if now.strftime("%H:%M") >= self.session_time:  # zero-padded, so text order = time order
             self._send_session(now.date().isoformat())
+            if now.weekday() == 0:  # Monday
+                self._send_body_prompt(now.date().isoformat())
+
+    def _send_body_prompt(self, day: str) -> None:
+        marker = f"sent:body:{day}"
+        if self.store.get(marker):
+            return
+        self.send('Weekly check-in: what is your body weight and waist today? '
+                  'Reply like "81.6 kg, waist 91".')
+        self.store.set(marker, "1")
 
     def _send_session(self, day: str) -> None:
         marker = f"sent:session:{day}"
