@@ -1,4 +1,6 @@
 # Inbox
+- Card sent 2026-11-16, card 1 (orchestrator). Bot restart at 15:31 checked in bot.log: "bot started", no error after.
+- Brian (2026-11-16): "for the gym bot, I want to set further specification of what I need. If you insist that I message the bot on Telegram just to test connectivity, that's fine, otherwise that can wait until a real gym session". Orchestrator: no test message is needed (the bot answered him on 13 Nov); this check waits for a real meal or session.
 
 ## Open
 
