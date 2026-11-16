@@ -290,7 +290,7 @@ still wait for Task 11.
     through the router with the fakes, and asserts that no model call happens and both replies
     state the limit; `/cost` still works.
 
-- [ ] **Task 16: live check of meals** needs: Task 13, Task 14 (slot 1 only) (checkpoint) (restart: no live worker held it on 2026-11-16 15:36)
+- [ ] **Task 16: live check of meals** needs: Task 13, Task 14 (slot 1 only) (checkpoint) (waiting: inbox, 2026-11-16: bot restarted through the scheduled task at 15:31 on the Task 12-14 code, log clean; Brian sends one real meal photo at a real meal or session, question in docs/inbox.md. Slot 1 never committed this mark; the orchestrator restored it)
   - Done when: Brian sends one real meal photo and gets an estimate and a daily total; the
     month's cost in `/cost` rose by less than US$0.01 for that photo; the card asks Brian
     whether the estimate looked reasonable.
