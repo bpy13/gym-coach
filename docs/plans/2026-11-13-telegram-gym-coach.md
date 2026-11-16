@@ -340,7 +340,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     the bot sends the list message (without the "Send start" line) and right after it the first
     exercise message. This replaces steps (1), (2) and the first call in (5) above, and the
     word start in the Done-when test.
-- [ ] **Task 9m: cardio days are Monday, Wednesday and Friday** `[parallel-ok]` (slot 1 only) (beside earlier phases) (taken: slot 1, 2026-11-16 17:00)
+- [ ] **Task 9m: cardio days are Monday, Wednesday and Friday** `[parallel-ok]` (slot 1 only) (beside earlier phases) (waiting: code and test done 2026-11-16 (slot 1), 147 tests pass, ruff clean; the delete of the 21 Nov row in datagym.db was refused by the auto-mode check (backup datagym.db.bak-9m exists); the orchestrator deletes that row and restarts `gym-coach-bot`, checks bot.log, then ticks this)
   - Brian, 2026-11-16: "cardio should be Mon Wed Fri" (decisions.md). Strength stays Tuesday,
     Thursday (home) and Sunday (parents' gym) (Task 9j). Saturday has no session.
   - Do: (1) In the day rule and the plan prompt (`planner.py`, `prompts.py`): cardio on Monday,

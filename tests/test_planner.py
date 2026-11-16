@@ -117,3 +117,13 @@ def test_no_cardio_on_a_strength_day(store):
     bad = plan().replace("2026-11-18", "2026-11-19")
     with pytest.raises(PlanError):
         run(store, [bad] * 2)
+
+
+def test_cardio_only_on_monday_wednesday_friday(store):
+    bad = plan().replace("2026-11-18", "2026-11-21")  # Saturday
+    with pytest.raises(PlanError):
+        run(store, [bad] * 2)
+    run(store, [plan()])
+    kinds = {r["date"]: r["kind"] for r in week(store)}
+    assert [d for d, k in kinds.items() if k == "cardio"] == ["2026-11-18"]
+    assert sorted(d for d, k in kinds.items() if k == "strength") == sorted(WEEKDAYS)
