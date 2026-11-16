@@ -115,31 +115,19 @@ def test_unreadable_image_becomes_text_only(setup):
     assert [len(i) for _, i in parts[1:3]] == [0, 1]
 
 
-def test_scheduler_sends_one_message_per_exercise(store, setup):
-    eq, photos = setup
+def test_scheduler_sends_list_then_first_exercise(store, setup):
+    _ = setup
     store.add_plan_session("2026-11-17", "home", "strength", "approved", strength()["exercises"])
     sent = []
     sch = Scheduler(store, lambda t: sent.append(("text", t)),
                     now=lambda: datetime(2026, 11, 17, 7, 0, tzinfo=HK),
-                    parts_for=lambda s: session_parts(s, eq, photos),
-                    send_parts=lambda p: sent.extend(("part", t, len(i)) for t, i in p))
+                    send_exercise=lambda s, i: sent.append(("exercise", s["date"], i)))
     sch.tick()
-    assert len(sent) == 6 and all(e[0] == "part" for e in sent)
-    assert sent[1] == ("part", "Press: 3 x 8-12 at 20 kg", 1)
+    assert [e[0] for e in sent] == ["text", "exercise"] and sent[1] == ("exercise", "2026-11-17", 0)
+    assert "start" not in sent[0][1].lower()
+    assert store.get("flow:2026-11-17") == "0"
     sch.tick()
-    assert len(sent) == 6  # once a day
-
-
-def test_scheduler_parts_failure_still_sends_text(store):
-    store.add_plan_session("2026-11-17", "home", "strength", "approved", strength()["exercises"])
-    texts = []
-
-    def boom(_):
-        raise RuntimeError("no photos")
-
-    Scheduler(store, texts.append, now=lambda: datetime(2026, 11, 17, 7, 0, tzinfo=HK),
-              parts_for=boom, send_parts=lambda p: None).tick()
-    assert len(texts) == 1 and "Leg ext: 3 x 8-12 at 20 kg" in texts[0]
+    assert len(sent) == 2  # once a day
 
 
 def test_proposal_message_lists_every_day():

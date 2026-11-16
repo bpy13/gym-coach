@@ -18,6 +18,9 @@ class StubRouter:
     def pop_album_session(self):
         return None
 
+    def pop_exercise(self):
+        return None
+
     def _today(self):
         from datetime import date
         return date(2026, 11, 16)

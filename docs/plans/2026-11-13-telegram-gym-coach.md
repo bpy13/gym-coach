@@ -309,7 +309,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     its sets, reps and weight; every exercise has at least one picture; tests cover the caption
     rule; and after the last start `data\bot.log` shows no new error. Do not send anything to
     Brian's chat as a test.
-- [ ] **Task 9l: a strength session shows one exercise at a time; the next comes when Brian reports** `[parallel-ok]` (slot 1 only) (beside earlier phases) (taken: slot 1, 2026-11-16 17:00)
+- [ ] **Task 9l: a strength session shows one exercise at a time; the next comes when Brian reports** `[parallel-ok]` (slot 1 only) (beside earlier phases) (waiting: bot restart. Code, tests and the dry run of 17 Nov are done 2026-11-16 (slot 1); the restart was refused by the auto-mode check, so the orchestrator restarts `gym-coach-bot` and checks bot.log, then ticks this)
   - Brian, 2026-11-16, on seeing the per-exercise messages of Task 9k all at once: "should show
     1 at a time, and as I report my progress and during resting, show next" (decisions.md).
   - Do: (1) At the session time the bot sends one text message: gym, date and the list of

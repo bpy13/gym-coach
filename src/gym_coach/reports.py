@@ -72,3 +72,15 @@ def format_log(store, day: str, header: str = "Logged:") -> str:
             parts.append((f"{w:g} kg x " if w is not None else "x ") + ", ".join(reps))
         lines.append(f"{name}: " + "; ".join(parts))
     return "\n".join(lines)
+
+
+def sets_done(store, day: str, exercise: str) -> int:
+    """How many sets of `exercise` are logged on `day`."""
+    return sum(1 for r in store.logged_sets(day) if _key(r["exercise"]) == _key(exercise))
+
+
+def format_exercise(store, day: str, exercise: str) -> str:
+    """One exercise's logged sets, e.g. 'Chest press: 35 kg x 10, 10, 8'."""
+    lines = format_log(store, day).splitlines()[1:]
+    return next((ln for ln in lines if _key(ln).startswith(_key(exercise) + ":")),
+                f"{exercise}: nothing logged")

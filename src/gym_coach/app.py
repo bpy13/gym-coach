@@ -10,10 +10,11 @@ import time
 from datetime import timedelta
 from pathlib import Path
 
-from gym_coach.albums import session_parts
+from gym_coach.albums import exercise_parts, session_parts
 from gym_coach.config import Config
 from gym_coach.illustrations import Illustrations
 from gym_coach.llm import Claude
+from gym_coach.messages import exercise_line
 from gym_coach.router import Router
 from gym_coach.scheduler import Scheduler
 from gym_coach.store import Store
@@ -58,8 +59,9 @@ class InstanceLock:
 
 class App:
     def __init__(self, telegram, router: Router, store: Store, chat_id: int | None = None,
-                 parts_for=None):
+                 parts_for=None, exercise_for=None):
         self.parts_for = parts_for  # session -> [(text, [jpeg bytes])], one per message
+        self.exercise_for = exercise_for  # (session, index) -> (caption, [jpeg bytes])
         self.telegram = telegram
         self.router = router
         self.store = store
@@ -88,6 +90,23 @@ class App:
             except Exception:
                 log.exception("sending the proposal's pictures failed")
         self.telegram.send_message(incoming.chat_id, reply)
+        self._send_exercise(incoming.chat_id)
+
+    def _send_exercise(self, chat_id: int) -> None:
+        """The exercise the router just moved to, after its short reply, so he reads it
+        while resting."""
+        shown = self.router.pop_exercise()
+        if shown is not None:
+            self.send_exercise(chat_id, *shown)
+
+    def send_exercise(self, chat_id: int, session: dict, index: int) -> None:
+        try:
+            part = (self.exercise_for(session, index) if self.exercise_for
+                    else (exercise_line(session["exercises"][index]), []))
+        except Exception:
+            log.exception("building the exercise message failed; sending text")
+            part = (exercise_line(session["exercises"][index]), [])
+        self.send_parts(chat_id, [part])
 
     def _has_upcoming_plan(self) -> bool:
         today = self.router._today()
@@ -114,12 +133,10 @@ class App:
                 log.exception("sending pictures failed; sending the text")
                 self.telegram.send_message(chat_id, text)
 
-    def send_parts_to_owner(self, parts) -> None:
+    def send_exercise_to_owner(self, session: dict, index: int) -> None:
         chat = self.chat_id or int(self.store.get("chat_id") or 0)
         if chat:
-            self.send_parts(chat, parts)
-        else:
-            log.warning("no chat known yet; session not sent")
+            self.send_exercise(chat, session, index)
 
     def send_to_owner(self, text: str) -> None:
         chat = self.chat_id or int(self.store.get("chat_id") or 0)
@@ -170,9 +187,13 @@ def build(config: Config) -> tuple[App, Scheduler, Store]:
         return session_parts(session, photos_dir=Path(config.photos_dir),
                              illustrations=illustrations, closing=closing)
 
-    app = App(telegram, router, store, parts_for=parts_for)
+    def exercise_for(session, index):
+        return exercise_parts(session, index, photos_dir=Path(config.photos_dir),
+                              illustrations=illustrations)
+
+    app = App(telegram, router, store, parts_for=parts_for, exercise_for=exercise_for)
     scheduler = Scheduler(store, app.send_to_owner, config.session_time, config.timezone,
-                          parts_for=parts_for, send_parts=app.send_parts_to_owner)
+                          send_exercise=app.send_exercise_to_owner)
     return app, scheduler, store
 
 

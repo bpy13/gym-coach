@@ -48,9 +48,22 @@ def _pictures(ex: dict, ids: dict, photos_dir, gym: str, illustrations) -> tuple
     return images, cue
 
 
+def exercise_parts(session: dict, index: int, equipment_path=None, photos_dir=None,
+                   illustrations=None) -> tuple[str, list[bytes]]:
+    """The message of exercise number `index` of a strength session, as (caption, jpeg images):
+    its pictures, if any, with ONE caption (name, sets x reps at weight, form cue)."""
+    ids = equipment_photo_ids(session["gym"], equipment_path or DEFAULT_EQUIPMENT)
+    ex = session["exercises"][index]
+    images, cue = _pictures(ex, ids, photos_dir or DEFAULT_PHOTOS, session["gym"], illustrations)
+    if not images:
+        log.warning("exercise %r goes out without a picture", ex.get("name"))
+    return exercise_line(ex) + (f"{NL}{cue}" if cue else ""), images
+
+
 def session_parts(session: dict, equipment_path=None, photos_dir=None, illustrations=None,
                   closing: bool = True) -> list[tuple[str, list[bytes]]]:
-    """The messages of a day's session, in order, as (text, jpeg images).
+    """All messages of a session at once, in order, as (text, jpeg images). Used for the
+    proposal's preview; the daily session goes out one exercise at a time (the router).
 
     Cardio is one text message. A strength session is a header (gym and date), one message
     per exercise (its pictures, if any, with ONE caption: name, sets x reps at weight, form
@@ -58,15 +71,9 @@ def session_parts(session: dict, equipment_path=None, photos_dir=None, illustrat
     """
     if session["kind"] == "cardio":
         return [(session_message(session), [])]
-    ids = equipment_photo_ids(session["gym"], equipment_path or DEFAULT_EQUIPMENT)
     parts: list[tuple[str, list[bytes]]] = [(head(session), [])]
-    for ex in session["exercises"]:
-        images, cue = _pictures(ex, ids, photos_dir or DEFAULT_PHOTOS, session["gym"],
-                                illustrations)
-        if not images:
-            log.warning("exercise %r goes out without a picture", ex.get("name"))
-        text = exercise_line(ex) + (f"{NL}{cue}" if cue else "")
-        parts.append((text, images))
+    for i in range(len(session["exercises"])):
+        parts.append(exercise_parts(session, i, equipment_path, photos_dir, illustrations))
     if closing:
         parts.append((CLOSING, []))
     return parts

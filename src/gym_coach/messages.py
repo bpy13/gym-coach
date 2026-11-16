@@ -31,6 +31,13 @@ def session_message(session: dict) -> str:
     return "\n".join([title, *_lines(session), CLOSING])
 
 
+def list_message(session: dict) -> str:
+    """The day's session as a plain list (no pictures); the exercises follow one by one."""
+    if session["kind"] == "cardio":
+        return session_message(session)
+    return "\n".join([head(session), *_lines(session)])
+
+
 def proposal_message(intro: str, sessions: list[dict]) -> str:
     """The coach's introduction, then every day of the proposed week with its exercises."""
     blocks = []

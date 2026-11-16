@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from gym_coach.messages import session_message
+from gym_coach.messages import list_message
 
 log = logging.getLogger(__name__)
 
@@ -17,11 +17,10 @@ class Scheduler:
 
     def __init__(self, store, send, session_time: str = "07:00",
                  timezone: str = "Asia/Hong_Kong", now=None,
-                 parts_for=None, send_parts=None):
+                 send_exercise=None):
         self.store = store
         self.send = send
-        self._parts_for = parts_for  # session -> [(text, [jpeg bytes])], one per message
-        self._send_parts = send_parts
+        self._send_exercise = send_exercise  # (session, index): exercise message
         self.session_time = session_time
         self._tz = ZoneInfo(timezone)
         self._now = now or (lambda: datetime.now(self._tz))
@@ -49,21 +48,13 @@ class Scheduler:
         session = self.store.plan_session(day)
         if not session or session["status"] != "approved":
             return
-        self._send_session_messages(session)
+        self.send(list_message(session))
+        if session["kind"] == "strength" and session["exercises"]:
+            if self._send_exercise:  # the first exercise right after the list
+                self._send_exercise(session, 0)
+            self.store.set(f"flow:{day}", "0")  # the router shows the next one per reply
         # Marked after the send: a crash in between may repeat a message, never lose one.
         self.store.set(marker, "1")
-
-    def _send_session_messages(self, session: dict) -> None:
-        """One message per exercise with its pictures; if they cannot be built, the plain text."""
-        if self._parts_for and self._send_parts:
-            try:
-                parts = self._parts_for(session)
-            except Exception:
-                log.exception("building the session's messages failed; sending text")
-            else:
-                self._send_parts(parts)
-                return
-        self.send(session_message(session))
 
     def run(self, should_stop=lambda: False, interval: float = 60.0) -> None:
         while not should_stop():

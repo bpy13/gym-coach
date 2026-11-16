@@ -25,6 +25,8 @@ values. Use an empty list when there are no sets."""
 
 BODY_JUMP_KG = 5.0
 PENDING_BODY = "pending:body"
+FLOW_KEY = "flow:"  # + day: index of the exercise shown now (kv); absent = not started
+NEXT_WORDS = {"next", "done", "skip"}  # orchestrator's call, 2026-11-16; Brian may change it
 YES = {"yes", "y", "yep", "yeah", "ok", "correct", "right", "confirm"}
 
 HELP = ("Hi! I'm your gym coach. I send the day's session; reply with what you did "
@@ -42,6 +44,7 @@ class Router:
         self._now = now or (lambda: datetime.now(HK))
         self._profile_path = profile_path
         self.album_session: dict | None = None  # first session of the last proposal
+        self.exercise_to_send: tuple[dict, int] | None = None  # (session, index) to show next
         # keyword arguments for planner.propose (it falls back to data\ when they are None)
         self._planner_kw = {k: v for k, v in
                             (("profile_path", profile_path), ("equipment_path", equipment_path),
@@ -84,14 +87,21 @@ class Router:
         pending = self._pending_body(text)
         if pending is not None:
             return pending
+        flow = self._flow_reply(text)
+        if flow is not None:
+            return flow
         data = self.claude.json(self.fast, text, system=CLASSIFY_SYSTEM)
         if not isinstance(data, dict):
             data = {}
         intent = data.get("intent")
         day = self._today().isoformat()
         if intent == "report":
-            if not reports.log_report(self.store, day, data.get("sets")):
+            shown = self._shown(day)
+            raw = self._to_shown(data.get("sets"), shown)
+            if not reports.log_report(self.store, day, raw):
                 return "I could not find any sets in that. Try \"chest press 35 kg 10 10 8\"."
+            if shown is not None:
+                return self._after_report(shown[0], shown[1], day)
             return reports.format_log(self.store, day)
         if intent == "correction":
             if not reports.correct(self.store, day, data.get("sets")):
@@ -122,6 +132,70 @@ class Router:
         if intent == "progress":
             return "That is coming soon."
         return self._answer(text)
+
+    # one exercise at a time: the scheduler shows the first; a completing reply the next
+    def _shown(self, day: str) -> tuple[dict, int] | None:
+        """(today's strength session, index of the exercise shown now) while one is open."""
+        raw = self.store.get(FLOW_KEY + day)
+        session = self.store.plan_session(day)
+        if raw is None or not session or session["kind"] != "strength":
+            return None
+        index = int(raw)
+        return (session, index) if index < len(session["exercises"]) else None
+
+    @staticmethod
+    def _to_shown(raw_sets, shown):
+        """Log reported sets against the exercise now shown, unless the set names another
+        exercise of today's session."""
+        if shown is None or not isinstance(raw_sets, list):
+            return raw_sets
+        names = {e["name"].strip().lower() for e in shown[0]["exercises"]}
+        current = shown[0]["exercises"][shown[1]]["name"]
+        out = []
+        for s in raw_sets:
+            if isinstance(s, dict) and str(s.get("exercise", "")).strip().lower() not in names:
+                s = {**s, "exercise": current}
+            out.append(s)
+        return out
+
+    def _flow_reply(self, text: str) -> str | None:
+        """Handle next / done / skip while a strength session is on; else None."""
+        word = text.lower().strip(" .!")
+        day = self._today().isoformat()
+        shown = self._shown(day) if word in NEXT_WORDS else None
+        if shown is None:
+            return None
+        session, index = shown
+        name = session["exercises"][index]["name"]
+        if word == "skip":
+            lead = f"Skipped {name}."
+        elif reports.sets_done(self.store, day, name):
+            lead = reports.format_exercise(self.store, day, name)
+        else:
+            lead = f"Nothing logged for {name}."
+        return self._advance(session, index, day, lead)
+
+    def _after_report(self, session: dict, index: int, day: str) -> str:
+        ex = session["exercises"][index]
+        line = reports.format_exercise(self.store, day, ex["name"])
+        left = int(ex["sets"]) - reports.sets_done(self.store, day, ex["name"])
+        if left > 0:
+            return f"{line}. {left} set{'s' if left != 1 else ''} left."
+        return self._advance(session, index, day, line)
+
+    def _advance(self, session: dict, index: int, day: str, lead: str) -> str:
+        """Move to the next exercise and queue its message, or close the session."""
+        nxt = index + 1
+        self.store.set(FLOW_KEY + day, str(nxt))
+        if nxt < len(session["exercises"]):
+            self.exercise_to_send = (session, nxt)
+            return lead
+        return f"{lead}\n\nSession done. " + reports.format_log(self.store, day, "Summary:")
+
+    def pop_exercise(self) -> tuple[dict, int] | None:
+        """The (session, index) whose exercise message goes out after the reply (once)."""
+        shown, self.exercise_to_send = self.exercise_to_send, None
+        return shown
 
     def _body(self, day: str, weight, waist) -> str:
         """Store this week's weight and waist; a weight far from the last one is questioned."""
