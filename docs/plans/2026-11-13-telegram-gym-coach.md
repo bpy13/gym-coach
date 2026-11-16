@@ -255,7 +255,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     (exercise names and counts only, no personal values). Tests cover a proposal whose model answer
     has no ids. Tests and ruff pass. The bot runs the new code and its log is clean.
   - Done 2026-11-16 (slot 1): code matches names to the catalogue, asks the model once for the rest (`planner.ensure_pictures`); ids added to the stored sessions of 18 and 20 Nov (17 and 19 are cardio) with `scriptsdd_illustration_ids.py`, nothing else changed. `session_album` on the real database, images per exercise: Wed 18 Nov [2, 2, 2, 1, 2, 1]; Fri 20 Nov [2, 1, 1, 1, 1, 2]. 136 tests pass, ruff clean.
-  - Step 3 not done: the auto-mode check refused `Stop-ScheduledTask`/`Start-ScheduledTask gym-coach-bot` (2026-11-16). Brian restarts the bot; the orchestrator checks `dataot.log` for a new "bot started" line and no error.
+  - Step 3 not done: the auto-mode check refused `Stop-ScheduledTask`/`Start-ScheduledTask gym-coach-bot` (2026-11-16). Brian restarts the bot; the orchestrator checks `databot.log` for a new "bot started" line and no error.
 - [ ] **Task 9j: strength days are Tuesday, Thursday (home) and Sunday (parents' gym)** (slot 1 only) (beside earlier phases) (waiting: bot restart. Code, tests and the stored week 17-22 Nov are done 2026-11-16 (slot 1); the restart was refused by the auto-mode check, so the orchestrator restarts `gym-coach-bot` and checks bot.log, then ticks this)
   - Brian, 2026-11-16: "I'd like to spend a session on Sunday", "yes parents' gym" and
     "do Tue, Thu, Sun" (decisions.md). This replaces Monday, Wednesday, Friday.
@@ -278,7 +278,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     another day from 17 to 22 Nov, every strength exercise has a picture (count them with
     `session_album`), tests pass, and `databot.log` shows no new error after the last start.
     Send the orchestrator the new sessions' dates, gyms and exercise names in the ENDED message.
-- [ ] **Task 9k: one Telegram message per exercise: machine photo, illustration and the task together** (slot 1 only) (beside earlier phases)
+- [ ] **Task 9k: one Telegram message per exercise: machine photo, illustration and the task together** `[parallel-ok]` (slot 1 only) (beside earlier phases)
   - Brian, 2026-11-16, on seeing a mock-up of the 18 Nov session (one text message, then one
     album of ten pictures): "(should be image + illustration + task) as one message. So if 5
     task on gym, like on Tuesday, 5 messages should be sent" (decisions.md).
