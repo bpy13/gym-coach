@@ -7,7 +7,7 @@ import pytest
 from PIL import Image
 
 from fakes import FakeClaude
-from gym_coach.albums import session_album
+from gym_coach.albums import session_parts
 from gym_coach.illustrations import Illustrations
 from gym_coach.llm import HK, Claude
 from gym_coach.planner import propose
@@ -116,7 +116,7 @@ def gym_files(tmp_path):
     return eq, tmp_path / "photos"
 
 
-def test_album_has_machine_photo_and_two_illustrations(ill, gym_files):
+def test_exercise_message_has_machine_photo_and_two_illustrations_under_one_caption(ill, gym_files):
     i, _ = ill
     eq, photos = gym_files
     session = {"date": "2026-11-17", "gym": "home", "kind": "strength", "exercises": [
@@ -124,24 +124,39 @@ def test_album_has_machine_photo_and_two_illustrations(ill, gym_files):
         ex("Goblet squat", "dumbbells on a rack", illustration="Goblet_Squat"),
         ex("Mystery", "dumbbells on a rack", illustration="Not_In_Db"),
         ex("Plain", "dumbbells on a rack")]}
-    album = session_album(session, eq, photos, illustrations=i)
-    assert [c.split("\n")[0] for _, c in album] == ["Chest press", "Goblet squat", ""]
-    assert "Hold one dumbbell" in album[1][1]
+    parts = session_parts(session, eq, photos, illustrations=i)
+    assert len(parts) == 4 + 2
+    body = parts[1:-1]
+    assert [len(imgs) for _, imgs in body] == [1, 2, 0, 0]
+    assert body[0][0] == "Chest press: 3 x 8-12 at 10 kg"
+    first, cue = body[1][0].split(chr(10), 1)
+    assert first == "Goblet squat: 3 x 8-12 at 10 kg" and cue.startswith("Hold one dumbbell")
 
 
-def test_album_without_illustrations_unchanged(gym_files):
+def test_machine_with_illustration_gets_photo_and_illustration(ill, gym_files):
+    i, _ = ill
+    eq, photos = gym_files
+    session = {"date": "2026-11-17", "gym": "home", "kind": "strength", "exercises": [
+        ex("Chest press", "chest press", illustration="Goblet_Squat")]}
+    (_, imgs), = session_parts(session, eq, photos, illustrations=i)[1:-1]
+    assert len(imgs) == 3
+
+
+def test_parts_without_illustrations_still_send_machine_photos(gym_files):
     eq, photos = gym_files
     session = {"date": "2026-11-17", "gym": "home", "kind": "strength", "exercises": [
         ex("Squat", "dumbbells on a rack", illustration="Goblet_Squat")]}
-    assert session_album(session, eq, photos) == []
+    parts = session_parts(session, eq, photos)
+    assert [len(i) for _, i in parts] == [0, 0, 0]  # text only; the exercise is not lost
 
 
-def test_album_survives_unreachable_images(gym_files, tmp_path):
+def test_parts_survive_unreachable_images(gym_files, tmp_path):
     eq, photos = gym_files
     down = Illustrations(tmp_path / "d", http_get=Net(fail=True))
     session = {"date": "2026-11-17", "gym": "home", "kind": "strength", "exercises": [
         ex("Squat", "dumbbells on a rack", illustration="Goblet_Squat")]}
-    assert session_album(session, eq, photos, illustrations=down) == []
+    parts = session_parts(session, eq, photos, illustrations=down)
+    assert len(parts) == 3 and parts[1][1] == []
 
 
 def test_proposal_keeps_only_listed_illustration_ids(ill, tmp_path):
@@ -232,7 +247,7 @@ def test_machine_with_photo_needs_no_illustration(ill, tmp_path):
     left = ensure_pictures(sessions, i, {"home": {}, "parents": {}},
                            {"home": {"chest press"}, "parents": set()},
                            equipment_path=eq, photos_dir=tmp_path / "photos")
-    assert left == [] and "illustration" not in sessions[0]["exercises"][0]
+    assert left == [] and "illustration" not in sessions[0]["exercises"][0]  # none in catalogue
 
 
 def test_match_ignores_equipment_words_and_extra_detail(ill):
@@ -242,3 +257,53 @@ def test_match_ignores_equipment_words_and_extra_detail(ill):
     assert i.match("Goblet squat at the wall", "dumbbells on a rack", allowed) == "Goblet_Squat"
     assert i.match("Goblet squat", "dual adjustable cable machine", allowed) is None
     assert i.match("Squat", "dumbbells on a rack", allowed) is None
+
+
+def test_machine_exercises_match_machine_entries(tmp_path):
+    cat = [{"id": "Leg_Press", "name": "Leg Press", "equipment": "machine", "level": "intermediate",
+            "category": "strength", "images": [], "instructions": []},
+           {"id": "Leg_Ext", "name": "Leg Extensions", "equipment": "machine",
+            "level": "beginner", "category": "strength", "images": [], "instructions": []}]
+    i = Illustrations(tmp_path / "m", http_get=lambda url: json.dumps(cat).encode())
+    assert i.allowed({"leg press"}) == {}
+    pool = i.allowed({"leg press"}, machines=True)
+    assert set(pool) == {"Leg_Press", "Leg_Ext"}
+    assert i.match("Leg extension", "leg extension", pool) == "Leg_Ext"
+    assert i.match("Seated leg press", "seated leg press", pool) == "Leg_Press"
+    assert i.fits("Leg_Press", "leg press") and not i.fits("Leg_Press", "dumbbells on a rack")
+
+
+def test_match_needs_the_same_body_position(tmp_path):
+    cat = [{"id": "Lat_Raise_Lying", "name": "Lateral Raise - Lying on Incline Bench",
+            "equipment": "dumbbell", "level": "beginner", "category": "strength",
+            "images": [], "instructions": []},
+           {"id": "Inc_Press", "name": "Incline Dumbbell Press", "equipment": "dumbbell",
+            "level": "beginner", "category": "strength", "images": [], "instructions": []},
+           {"id": "Seated_Curl", "name": "Seated Dumbbell Curl", "equipment": "dumbbell",
+            "level": "beginner", "category": "strength", "images": [], "instructions": []}]
+    i = Illustrations(tmp_path / "p", http_get=lambda url: json.dumps(cat).encode())
+    pool = i.allowed({"dumbbells"})
+    assert i.match("Dumbbell lateral raise", "dumbbells", pool) is None
+    assert i.match("Dumbbell press", "dumbbells", pool) is None
+    assert i.match("Incline dumbbell press", "dumbbells", pool) == "Inc_Press"
+    assert i.match("Seated curl", "dumbbells", pool) == "Seated_Curl"
+    assert i.match("Standing dumbbell curl", "dumbbells", pool) is None
+    assert i.match("Lying dumbbell curl", "dumbbells", pool) is None
+
+
+def test_machine_exercise_with_photo_gets_an_illustration_by_name(tmp_path):
+    from gym_coach.planner import ensure_pictures
+    cat = [{"id": "Leg_Ext", "name": "Leg Extensions", "equipment": "machine",
+            "level": "beginner", "category": "strength", "images": [], "instructions": []}]
+    i = Illustrations(tmp_path / "m", http_get=lambda url: json.dumps(cat).encode())
+    eq, photos = tmp_path / "eq.md", tmp_path / "photos" / "home"
+    eq.write_text(EQUIPMENT.replace("Chest press", "Leg extension"), encoding="utf-8")
+    photos.mkdir(parents=True)
+    (photos / "IMG_A1.jpg").write_bytes(jpeg())
+    sessions = [{"date": "d", "gym": "home", "kind": "strength", "exercises": [
+        ex("Leg extension", "leg extension"), ex("Odd machine", "leg extension")]}]
+    left = ensure_pictures(sessions, i, {"home": {}, "parents": {}},
+                           {"home": {"leg extension"}, "parents": set()},
+                           equipment_path=eq, photos_dir=tmp_path / "photos")
+    assert left == []  # both have the machine photo
+    assert [e.get("illustration") for e in sessions[0]["exercises"]] == ["Leg_Ext", None]

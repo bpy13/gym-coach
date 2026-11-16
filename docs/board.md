@@ -1,7 +1,6 @@
 # Board: gym-coach
 
 ## Workers
-- slot 1: Task 9k, one message per exercise (building)
 
 ## Ready to build
 
@@ -33,3 +32,4 @@
 - Task 11, live check with the real bot: done 2026-11-16 (slot 1). Bot runs; first week stored as proposed, uses only listed equipment; month cost US$0.07; 132 tests pass, ruff clean. Brian still approves the schedule in the chat and logs one real session per gym.
 - Task 9i, every exercise gets a picture (`planner.py`, `illustrations.py`, `scriptsdd_illustration_ids.py`): code and stored sessions done 2026-11-16 (slot 1); 136 tests pass, ruff clean. Waiting: bot restart was refused by the auto-mode check; Brian restarts, orchestrator checks bot.log.
 - Task 9j, strength on Tue, Thu (home) and Sun (parents'): code and stored week 17-22 Nov done 2026-11-16 (slot 1); 138 tests pass, ruff clean. Paid call: one coach-model proposal, cost not yet read from /cost (well under US$1). Every strength exercise has a picture or machine photo. Waiting: bot restart refused by the auto-mode check; orchestrator restarts and checks bot.log.
+- Task 9k, one Telegram message per exercise (`albums.py session_parts`, `telegram.py send_pictures`, `illustrations.py` position and equipment match): code and stored sessions 17-22 Nov done 2026-11-16 (slot 1); 143 tests pass, ruff clean. Real db: 8, 9 and 8 messages for 6, 7 and 6 exercises, every exercise has a picture. Paid calls: two small fast-model calls, well under US$1. Waiting: bot restart refused by the auto-mode check; orchestrator restarts and checks bot.log.

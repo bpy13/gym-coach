@@ -17,11 +17,11 @@ class Scheduler:
 
     def __init__(self, store, send, session_time: str = "07:00",
                  timezone: str = "Asia/Hong_Kong", now=None,
-                 album_for=None, send_album=None):
+                 parts_for=None, send_parts=None):
         self.store = store
         self.send = send
-        self._album_for = album_for  # session -> [(jpeg bytes, caption)]
-        self._send_album = send_album
+        self._parts_for = parts_for  # session -> [(text, [jpeg bytes])], one per message
+        self._send_parts = send_parts
         self.session_time = session_time
         self._tz = ZoneInfo(timezone)
         self._now = now or (lambda: datetime.now(self._tz))
@@ -49,21 +49,21 @@ class Scheduler:
         session = self.store.plan_session(day)
         if not session or session["status"] != "approved":
             return
-        self._try_album(session)
-        self.send(session_message(session))
+        self._send_session_messages(session)
         # Marked after the send: a crash in between may repeat a message, never lose one.
         self.store.set(marker, "1")
 
-    def _try_album(self, session: dict) -> None:
-        """Machine photos first; a failure here never blocks the text."""
-        if not (self._album_for and self._send_album):
-            return
-        try:
-            album = self._album_for(session)
-            if album:
-                self._send_album(album)
-        except Exception:
-            log.exception("sending the session's photos failed")
+    def _send_session_messages(self, session: dict) -> None:
+        """One message per exercise with its pictures; if they cannot be built, the plain text."""
+        if self._parts_for and self._send_parts:
+            try:
+                parts = self._parts_for(session)
+            except Exception:
+                log.exception("building the session's messages failed; sending text")
+            else:
+                self._send_parts(parts)
+                return
+        self.send(session_message(session))
 
     def run(self, should_stop=lambda: False, interval: float = 60.0) -> None:
         while not should_stop():

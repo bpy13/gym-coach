@@ -7,7 +7,7 @@ import pytest
 from PIL import Image
 
 from fakes import FakeClaude, FakeTelegram
-from gym_coach.albums import session_album, shrink
+from gym_coach.albums import session_parts, shrink
 from gym_coach.app import App
 from gym_coach.context import equipment_photo_ids, photo_file
 from gym_coach.llm import HK, Claude
@@ -87,41 +87,50 @@ def test_shrink_limits_long_edge():
     assert small.size == (300, 200)
 
 
-def test_album_has_one_photo_per_exercise_and_skips_missing(setup):
+def test_session_is_header_one_message_per_exercise_and_closing(setup):
     eq, photos = setup
-    album = session_album(strength(), eq, photos)
-    assert [caption for _, caption in album] == ["Press", "Pulldown"]
-    assert max(Image.open(io.BytesIO(album[0][0])).size) == 1280
+    parts = session_parts(strength(), eq, photos)
+    assert len(parts) == 4 + 2
+    assert parts[0] == ("Home gym, Tue 17 Nov", [])
+    assert parts[-1][0].startswith("Reply with what you did") and parts[-1][1] == []
+    texts = [t for t, _ in parts[1:-1]]
+    assert texts == ["Press: 3 x 8-12 at 20 kg", "Pulldown: 3 x 8-12 at 20 kg",
+                     "Leg ext: 3 x 8-12 at 20 kg", "Shoulders: 3 x 8-12 at 20 kg"]
+    assert [len(imgs) for _, imgs in parts[1:-1]] == [1, 1, 0, 0]  # no photo: text only
+    assert max(Image.open(io.BytesIO(parts[1][1][0])).size) == 1280
 
 
 def test_no_album_on_cardio_day(setup):
     eq, photos = setup
     cardio = {"date": "2026-11-18", "gym": "home", "kind": "cardio", "status": "approved",
               "exercises": []}
-    assert session_album(cardio, eq, photos) == []
+    parts = session_parts(cardio, eq, photos)
+    assert len(parts) == 1 and parts[0][1] == [] and "Cardio" in parts[0][0]
 
 
-def test_unreadable_image_skipped(setup):
+def test_unreadable_image_becomes_text_only(setup):
     eq, photos = setup
     (photos / "home" / "IMG_A1.jpg").write_bytes(b"not an image")
-    assert [c for _, c in session_album(strength(), eq, photos)] == ["Pulldown"]
+    parts = session_parts(strength(), eq, photos)
+    assert [len(i) for _, i in parts[1:3]] == [0, 1]
 
 
-def test_scheduler_sends_album_then_text(store, setup):
+def test_scheduler_sends_one_message_per_exercise(store, setup):
     eq, photos = setup
     store.add_plan_session("2026-11-17", "home", "strength", "approved", strength()["exercises"])
-    events = []
-    sch = Scheduler(store, lambda t: events.append(("text", t)),
+    sent = []
+    sch = Scheduler(store, lambda t: sent.append(("text", t)),
                     now=lambda: datetime(2026, 11, 17, 7, 0, tzinfo=HK),
-                    album_for=lambda s: session_album(s, eq, photos),
-                    send_album=lambda a: events.append(("album", [c for _, c in a])))
+                    parts_for=lambda s: session_parts(s, eq, photos),
+                    send_parts=lambda p: sent.extend(("part", t, len(i)) for t, i in p))
     sch.tick()
-    assert [e[0] for e in events] == ["album", "text"]
-    assert events[0][1] == ["Press", "Pulldown"]
-    assert "Leg ext: 3 x 8-12 at 20 kg" in events[1][1]
+    assert len(sent) == 6 and all(e[0] == "part" for e in sent)
+    assert sent[1] == ("part", "Press: 3 x 8-12 at 20 kg", 1)
+    sch.tick()
+    assert len(sent) == 6  # once a day
 
 
-def test_scheduler_album_failure_still_sends_text(store):
+def test_scheduler_parts_failure_still_sends_text(store):
     store.add_plan_session("2026-11-17", "home", "strength", "approved", strength()["exercises"])
     texts = []
 
@@ -129,8 +138,8 @@ def test_scheduler_album_failure_still_sends_text(store):
         raise RuntimeError("no photos")
 
     Scheduler(store, texts.append, now=lambda: datetime(2026, 11, 17, 7, 0, tzinfo=HK),
-              album_for=boom, send_album=lambda a: None).tick()
-    assert len(texts) == 1
+              parts_for=boom, send_parts=lambda p: None).tick()
+    assert len(texts) == 1 and "Leg ext: 3 x 8-12 at 20 kg" in texts[0]
 
 
 def test_proposal_message_lists_every_day():
@@ -154,14 +163,16 @@ def test_proposal_sends_album_for_first_session_then_full_text(store, setup):
     router = Router(store, Claude(fake, store, 5.0, now=lambda: now), "claude-haiku-5-5", "claude-opus-5-5", now=lambda: now,
                     profile_path="examples/profile.md", equipment_path="examples/equipment.md")
     tg = FakeTelegram()
-    app = App(tg, router, store, album_for=lambda s: session_album(s, eq, photos))
+    app = App(tg, router, store,
+              parts_for=lambda s, closing=True: session_parts(s, eq, photos, closing=closing))
     app.handle(Incoming(1, 5, text="/propose"))
-    assert len(tg.albums) == 1 and [c for _, c in tg.albums[0][1]] == ["Press"]
-    text = tg.sent[0][1]
+    assert [c for _, _, c in tg.pictures] == ["Press: 3 x 8-12 at 20 kg"]
+    assert "Reply with what you did" not in " ".join(t for _, t in tg.sent[:-1])
+    text = tg.sent[-1][1]
     assert "Your week." in text and "Press: 3 x 8-12 at 20 kg" in text
     assert "Wed 25 Nov: cardio" in text
     app.handle(Incoming(2, 5, text="/today"))
-    assert len(tg.albums) == 1  # only a proposal sends photos
+    assert len(tg.pictures) == 1  # only a proposal sends pictures
 
 
 def test_send_album_posts_media_group_and_single_photo():
@@ -177,6 +188,22 @@ def test_send_album_posts_media_group_and_single_photo():
     tg.send_album(5, [])
     assert [c.url.path.rsplit("/", 1)[1] for c in calls] == ["sendMediaGroup", "sendPhoto"]
     assert b"attach://p1" in calls[0].content and b"Two" in calls[0].content
+
+
+def test_send_pictures_puts_one_caption_on_the_first_item_only():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(200, json={"ok": True, "result": []})
+
+    tg = TelegramClient("TOKEN", 1, client=httpx.Client(transport=httpx.MockTransport(handler)))
+    tg.send_pictures(5, [b"a", b"b"], "Press: 3 x 8-12 at 20 kg")
+    import re
+    captions = re.findall(rb'"caption": "([^"]*)"', calls[0].content)
+    assert captions == [b"Press: 3 x 8-12 at 20 kg", b""]
+    tg.send_pictures(5, [b"a"], "One")
+    assert calls[1].url.path.endswith("sendPhoto") and b"One" in calls[1].content
 
 
 def test_send_album_error_hides_token():

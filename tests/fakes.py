@@ -9,6 +9,7 @@ class FakeTelegram:
         self.files = dict(files or {})
         self.sent: list[tuple[int, str]] = []
         self.albums: list[tuple[int, list]] = []
+        self.pictures: list[tuple[int, list, str]] = []
 
     def get_updates(self):
         out, self.incoming = self.incoming, []
@@ -19,6 +20,9 @@ class FakeTelegram:
 
     def send_album(self, chat_id, photos):
         self.albums.append((chat_id, list(photos)))
+
+    def send_pictures(self, chat_id, images, caption):
+        self.pictures.append((chat_id, list(images), caption))
 
     def download_file(self, file_id):
         return self.files[file_id]

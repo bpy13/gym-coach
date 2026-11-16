@@ -10,7 +10,7 @@ import time
 from datetime import timedelta
 from pathlib import Path
 
-from gym_coach.albums import session_album
+from gym_coach.albums import session_parts
 from gym_coach.config import Config
 from gym_coach.illustrations import Illustrations
 from gym_coach.llm import Claude
@@ -58,8 +58,8 @@ class InstanceLock:
 
 class App:
     def __init__(self, telegram, router: Router, store: Store, chat_id: int | None = None,
-                 album_for=None):
-        self.album_for = album_for  # session -> [(jpeg bytes, caption)]
+                 parts_for=None):
+        self.parts_for = parts_for  # session -> [(text, [jpeg bytes])], one per message
         self.telegram = telegram
         self.router = router
         self.store = store
@@ -82,13 +82,11 @@ class App:
         if text.split()[0].lower() == "/start" and not self._has_upcoming_plan():
             reply += "\n\n" + self.router.handle("/propose")
         session = self.router.pop_album_session()
-        if session and self.album_for:
-            try:
-                album = self.album_for(session)
-                if album:
-                    self.telegram.send_album(incoming.chat_id, album)
+        if session and self.parts_for:
+            try:  # a preview of the first strength day, one message per exercise
+                self.send_parts(incoming.chat_id, self.parts_for(session, closing=False))
             except Exception:
-                log.exception("sending the proposal's photos failed")
+                log.exception("sending the proposal's pictures failed")
         self.telegram.send_message(incoming.chat_id, reply)
 
     def _has_upcoming_plan(self) -> bool:
@@ -103,10 +101,25 @@ class App:
             except Exception:
                 log.exception("handling a message failed")
 
-    def send_album_to_owner(self, album) -> None:
+    def send_parts(self, chat_id: int, parts) -> None:
+        """Each part is (text, images): pictures with the text as their one caption, or the
+        text alone. A picture that fails to send falls back to its caption as text."""
+        for text, images in parts:
+            if not images:
+                self.telegram.send_message(chat_id, text)
+                continue
+            try:
+                self.telegram.send_pictures(chat_id, images, text)
+            except Exception:
+                log.exception("sending pictures failed; sending the text")
+                self.telegram.send_message(chat_id, text)
+
+    def send_parts_to_owner(self, parts) -> None:
         chat = self.chat_id or int(self.store.get("chat_id") or 0)
         if chat:
-            self.telegram.send_album(chat, album)
+            self.send_parts(chat, parts)
+        else:
+            log.warning("no chat known yet; session not sent")
 
     def send_to_owner(self, text: str) -> None:
         chat = self.chat_id or int(self.store.get("chat_id") or 0)
@@ -153,13 +166,13 @@ def build(config: Config) -> tuple[App, Scheduler, Store]:
         owner = int(store.get("owner_id"))
     telegram = TelegramClient(config.telegram_bot_token, owner,
                               on_pair=lambda uid: store.set("owner_id", str(uid)))
-    def album_for(session):
-        return session_album(session, photos_dir=Path(config.photos_dir),
-                             illustrations=illustrations)
+    def parts_for(session, closing=True):
+        return session_parts(session, photos_dir=Path(config.photos_dir),
+                             illustrations=illustrations, closing=closing)
 
-    app = App(telegram, router, store, album_for=album_for)
+    app = App(telegram, router, store, parts_for=parts_for)
     scheduler = Scheduler(store, app.send_to_owner, config.session_time, config.timezone,
-                          album_for=album_for, send_album=app.send_album_to_owner)
+                          parts_for=parts_for, send_parts=app.send_parts_to_owner)
     return app, scheduler, store
 
 

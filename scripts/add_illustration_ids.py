@@ -5,13 +5,13 @@ Usage: python scripts\add_illustration_ids.py 2026-11-17 2026-11-20 [--write]
 Matches exercise names against the catalogue by code; what is left goes to the model once
 (an id of the closest variant only, never a replacement exercise). Changes only the
 "illustration" key of exercises; prints exercise names and picture counts per day, no weights.
-Without --write it only reports.
+Without --write it only reports. Machine exercises get an id too (Task 9k).
 """
 
 import sys
 from pathlib import Path
 
-from gym_coach.albums import session_album
+from gym_coach.albums import session_parts
 from gym_coach.config import load_config
 from gym_coach.context import equipment_for
 from gym_coach.illustrations import Illustrations
@@ -37,9 +37,12 @@ def main(start: str, end: str, write: bool) -> None:
         if write:
             store.add_plan_session(s["date"], s["gym"], s["kind"], s["status"], s["exercises"])
         n = len(s["exercises"])
-        album = session_album(s, "data/equipment.md", illustrations=ill)
-        print(s["date"], s["gym"], f"{n} exercises", f"{len(album)} images",
+        parts = session_parts(s, "data/equipment.md", illustrations=ill)
+        print(s["date"], s["gym"], f"{n} exercises", f"{len(parts)} messages",
               "without picture:", left or "none")
+        for ex in s["exercises"]:  # which catalogue entry each exercise got, to look at
+            entry = ill.catalog().get(ex.get("illustration") or "") or {}
+            print("   ", ex["name"], "|", ex["equipment"][:30], "->", entry.get("name", "-"))
     store.close()
 
 

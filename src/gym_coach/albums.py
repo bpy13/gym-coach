@@ -1,4 +1,4 @@
-"""The photos of a session's machines, shrunk and ready to send as one album."""
+"""A session as Telegram messages: one per exercise, with its pictures shrunk and captioned."""
 
 from __future__ import annotations
 
@@ -9,9 +9,11 @@ from pathlib import Path
 from PIL import Image, UnidentifiedImageError
 
 from gym_coach.context import DEFAULT_EQUIPMENT, DEFAULT_PHOTOS, equipment_photo_ids, photo_file
+from gym_coach.messages import CLOSING, exercise_line, head, session_message
 
 log = logging.getLogger(__name__)
 MAX_EDGE = 1280
+NL = chr(10)
 
 
 def shrink(data: bytes, max_edge: int = MAX_EDGE) -> bytes:
@@ -24,41 +26,47 @@ def shrink(data: bytes, max_edge: int = MAX_EDGE) -> bytes:
     return out.getvalue()
 
 
-def _illustration(ex: dict, illustrations) -> list[tuple[bytes, str]]:
-    """The start and end images of a free-weight or cable exercise; the first carries the
-    exercise name and a form cue. [] when there is none (the exercise still goes in the text)."""
-    ex_id = ex.get("illustration")
-    if not ex_id or illustrations is None:
-        return []
-    try:
-        images = [shrink(data) for data in illustrations.images(ex_id)]
-        cue = illustrations.cue(ex_id)
-    except (OSError, UnidentifiedImageError):
-        log.warning("illustration %s could not be read; skipped", ex_id)
-        return []
-    caption = f"{ex['name']}\n{cue}" if cue else str(ex["name"])
-    return [(img, caption if i == 0 else "") for i, img in enumerate(images)]
-
-
-def session_album(session: dict, equipment_path=None, photos_dir=None,
-                  illustrations=None) -> list[tuple[bytes, str]]:
-    """(jpeg bytes, caption) per image: Brian's photo of the machine for an exercise that has
-    one, else the exercise's two illustrations. [] on cardio days.
-
-    An exercise without either, a missing file or an unreadable image is skipped.
-    """
-    if session["kind"] == "cardio":
-        return []
-    ids = equipment_photo_ids(session["gym"], equipment_path or DEFAULT_EQUIPMENT)
-    album: list[tuple[bytes, str]] = []
-    for ex in session["exercises"]:
-        photo_id = ids.get(str(ex.get("equipment", "")).strip().lower())
-        found = photo_file(session["gym"], photo_id, photos_dir or DEFAULT_PHOTOS) if photo_id else None
-        if found is None:
-            album.extend(_illustration(ex, illustrations))
-            continue
+def _pictures(ex: dict, ids: dict, photos_dir, gym: str, illustrations) -> tuple[list[bytes], str]:
+    """(jpeg images, form cue) for one exercise: Brian's photo of the machine when it uses one,
+    then the illustration of the movement when it has one."""
+    images: list[bytes] = []
+    cue = ""
+    photo_id = ids.get(str(ex.get("equipment", "")).strip().lower())
+    found = photo_file(gym, photo_id, photos_dir) if photo_id else None
+    if found is not None:
         try:
-            album.append((shrink(Path(found).read_bytes()), str(ex["name"])))
+            images.append(shrink(Path(found).read_bytes()))
         except (OSError, UnidentifiedImageError):
             log.warning("photo %s could not be read; skipped", photo_id)
-    return album
+    ex_id = ex.get("illustration")
+    if ex_id and illustrations is not None:
+        try:
+            images.extend(shrink(data) for data in illustrations.images(ex_id))
+            cue = illustrations.cue(ex_id)
+        except (OSError, UnidentifiedImageError):
+            log.warning("illustration %s could not be read; skipped", ex_id)
+    return images, cue
+
+
+def session_parts(session: dict, equipment_path=None, photos_dir=None, illustrations=None,
+                  closing: bool = True) -> list[tuple[str, list[bytes]]]:
+    """The messages of a day's session, in order, as (text, jpeg images).
+
+    Cardio is one text message. A strength session is a header (gym and date), one message
+    per exercise (its pictures, if any, with ONE caption: name, sets x reps at weight, form
+    cue; an exercise with no picture is text only), then the closing line.
+    """
+    if session["kind"] == "cardio":
+        return [(session_message(session), [])]
+    ids = equipment_photo_ids(session["gym"], equipment_path or DEFAULT_EQUIPMENT)
+    parts: list[tuple[str, list[bytes]]] = [(head(session), [])]
+    for ex in session["exercises"]:
+        images, cue = _pictures(ex, ids, photos_dir or DEFAULT_PHOTOS, session["gym"],
+                                illustrations)
+        if not images:
+            log.warning("exercise %r goes out without a picture", ex.get("name"))
+        text = exercise_line(ex) + (f"{NL}{cue}" if cue else "")
+        parts.append((text, images))
+    if closing:
+        parts.append((CLOSING, []))
+    return parts

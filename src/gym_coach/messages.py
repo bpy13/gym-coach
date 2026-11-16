@@ -2,6 +2,7 @@
 
 from datetime import date
 
+CLOSING = "Reply with what you did, and how hard each set felt."
 GYM_NAMES = {"home": "Home gym", "parents": "Parents' gym"}
 
 
@@ -9,24 +10,25 @@ def _weight(kg) -> str:
     return f"{kg:g} kg" if isinstance(kg, (int, float)) else "light weight"
 
 
-def _head(session: dict) -> str:
+def head(session: dict) -> str:
     day = date.fromisoformat(session["date"])
     return f"{GYM_NAMES.get(session['gym'], session['gym'])}, {day:%a} {day.day} {day:%b}"
 
 
+def exercise_line(e: dict) -> str:
+    return f"{e['name']}: {e['sets']} x {e['rep_low']}-{e['rep_high']} at {_weight(e.get('weight_kg'))}"
+
+
 def _lines(session: dict) -> list[str]:
-    return [
-        f"{e['name']}: {e['sets']} x {e['rep_low']}-{e['rep_high']} at {_weight(e.get('weight_kg'))}"
-        for e in session["exercises"]
-    ]
+    return [exercise_line(e) for e in session["exercises"]]
 
 
 def session_message(session: dict) -> str:
     """The day's session: gym and date on the first line, then one line per exercise."""
-    head = _head(session)
+    title = head(session)
     if session["kind"] == "cardio":
-        return f"{head}\nCardio today at a heart rate of about 130."
-    return "\n".join([head, *_lines(session), "Reply with what you did, and how hard each set felt."])
+        return f"{title}\nCardio today at a heart rate of about 130."
+    return "\n".join([title, *_lines(session), CLOSING])
 
 
 def proposal_message(intro: str, sessions: list[dict]) -> str:
@@ -34,7 +36,7 @@ def proposal_message(intro: str, sessions: list[dict]) -> str:
     blocks = []
     for s in sessions:
         if s["kind"] == "cardio":
-            blocks.append(f"{_head(s)}: cardio at a heart rate of about 130.")
+            blocks.append(f"{head(s)}: cardio at a heart rate of about 130.")
         else:
-            blocks.append("\n".join([f"{_head(s)}: strength", *_lines(s)]))
+            blocks.append("\n".join([f"{head(s)}: strength", *_lines(s)]))
     return "\n\n".join([intro, *blocks]) if blocks else intro

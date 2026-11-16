@@ -23,7 +23,36 @@ _KINDS = (("dumbbell", "dumbbell"), ("cable", "cable"), ("ez curl", "e-z curl ba
           ("barbell", "barbell"))
 
 
-_STOP = {"the", "a", "with", "to", "on", "of", "and", "dumbbell", "cable", "barbell", "ez", "bar"}
+_STOP = {"the", "a", "with", "to", "on", "of", "and", "dumbbell", "cable", "barbell", "ez", "bar",
+         "machine"}
+_LYING = {"lying", "prone", "supine", "incline", "decline", "flat"}
+
+
+def kinds_of(equipment: str) -> set[str]:
+    """The database equipment values an exercise's equipment name stands for; a name with no
+    free-weight or cable word is one of Brian's machines."""
+    low = str(equipment).lower()
+    return {kind for word, kind in _KINDS if word in low} or {"machine"}
+
+
+def position(name: str) -> str | None:
+    """Body position an exercise name states: incline, decline, lying, seated, standing."""
+    words = set("".join(c if c.isalnum() else " " for c in str(name).lower()).split())
+    for w in ("incline", "decline"):
+        if w in words:
+            return w
+    if words & _LYING:
+        return "lying"
+    if words & {"seated", "sitting"}:
+        return "seated"
+    return "standing" if "standing" in words else None
+
+
+def positions_agree(a: str | None, b: str | None) -> bool:
+    """Same position; or one side silent and the other only seated/standing (the usual way)."""
+    if a == b:
+        return True
+    return (a is None and b in ("seated", "standing")) or (b is None and a in ("seated", "standing"))
 
 
 def _words(text: str) -> set[str]:
@@ -62,13 +91,22 @@ class Illustrations:
                 return {}
         return self._catalog
 
-    def allowed(self, equipment: set[str]) -> dict[str, str]:
+    def allowed(self, equipment: set[str], machines: bool = False) -> dict[str, str]:
         """id -> name of the beginner strength exercises that need only free weights or
-        cables present in `equipment` (a set of equipment names at one gym)."""
+        cables present in `equipment` (a set of equipment names at one gym). With `machines`,
+        the catalogue's machine exercises of any level are listed too."""
         kinds = {kind for word, kind in _KINDS if any(word in name for name in equipment)}
         return {i: e["name"] for i, e in sorted(self.catalog().items())
-                if e.get("equipment") in kinds and e.get("level") == "beginner"
-                and e.get("category") == "strength"}
+                if e.get("category") == "strength"
+                and ((e.get("equipment") in kinds and e.get("level") == "beginner")
+                     or (machines and e.get("equipment") == "machine"))}
+
+    def fits(self, ex_id: str, equipment: str, name: str | None = None) -> bool:
+        """Whether the catalogue entry uses the kind of equipment the exercise uses and, when
+        the exercise `name` is given, shows it in the same body position."""
+        entry = self.catalog().get(ex_id) or {}
+        return (entry.get("equipment") in kinds_of(equipment)
+                and (name is None or positions_agree(position(name), position(entry.get("name", "")))))
 
     def cue(self, ex_id: str) -> str:
         """One short form cue: the first instruction sentence of the exercise."""
@@ -101,14 +139,18 @@ class Illustrations:
         """The id in `allowed` (id -> name) that shows the exercise `name`, or None.
 
         Only entries whose database equipment fits the exercise's equipment name are
-        considered; the name must match exactly (ignoring case, plurals, filler words) or
+        considered, and its body position (incline, lying, seated, standing) must agree
+        with the exercise's; the name must match exactly (ignoring case, plurals, filler words) or
         share at least 70% of its words, or one name contains all words of the other (two or more).
         """
-        kinds = {kind for word, kind in _KINDS if word in str(equipment).lower()}
+        kinds = kinds_of(equipment)
         want = _words(name)
+        want_pos = position(name)
         best, best_score = None, 0.0
         for i, n in allowed.items():
             if (self.catalog().get(i) or {}).get("equipment") not in kinds:
+                continue
+            if not positions_agree(want_pos, position(n)):
                 continue
             have = _words(n)
             if not want or not have:

@@ -149,6 +149,12 @@ class TelegramClient:
         for i in range(0, len(photos), 10):
             self._send_group(chat_id, photos[i:i + 10])
 
+    def send_pictures(self, chat_id: int, images: list[bytes], caption: str) -> None:
+        """One exercise's pictures with ONE caption, on the first item (Telegram shows no
+        caption under an album unless exactly one item carries it)."""
+        self.send_album(chat_id, [(img, caption if i == 0 else "")
+                                  for i, img in enumerate(images)])
+
     def _send_group(self, chat_id: int, photos: list[tuple[bytes, str]]) -> None:
         try:
             if len(photos) == 1:

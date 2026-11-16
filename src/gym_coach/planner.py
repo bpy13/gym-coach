@@ -86,44 +86,54 @@ def ensure_pictures(sessions: list[dict], illustrations, allowed: dict[str, dict
                     equipment: dict[str, set[str]], claude=None, model: str | None = None,
                     equipment_path=None, photos_dir=None,
                     allow_replace: bool = True) -> list[str]:
-    """Make every strength exercise carry Brian's machine photo or a valid illustration id.
+    """Give every strength exercise an illustration id where the catalogue has the movement,
+    and make sure each has a picture: Brian's machine photo or an illustration.
 
-    First by matching the exercise name against the gym's catalogue (code); what still has
-    nothing is put to the model once (an id, or a replacement exercise that has one).
-    Edits `sessions` in place; returns the names that still have no picture.
+    An id must name an entry of that gym's catalogue that uses the exercise's kind of equipment
+    (free weight, cable or machine). First by matching the exercise name (code, which also
+    checks the body position); what still has none is put to the model once (an id, or for an
+    exercise without a machine photo a replacement exercise that has one). Edits `sessions` in
+    place; returns the names that still have no picture at all. Machine exercises that stay
+    without an illustration are logged.
     """
     photos_dir = photos_dir or DEFAULT_PHOTOS
     photo_ids = {g: equipment_photo_ids(g, equipment_path or DEFAULT_EQUIPMENT)
                  for g in equipment}
+    pool = {g: {**allowed.get(g, {}), **illustrations.allowed(equipment[g], machines=True)}
+            for g in equipment}
     missing = []  # (session, exercise)
     for s in sessions:
         if s["kind"] != "strength":
             continue
         gym = s["gym"]
         for ex in s["exercises"]:
-            if _has_machine_photo(gym, ex, photo_ids[gym], photos_dir):
-                ex.pop("illustration", None)
-                continue
-            if ex.get("illustration") in allowed.get(gym, {}):
+            cur = ex.get("illustration")
+            if cur in pool.get(gym, {}) and illustrations.fits(cur, ex.get("equipment", ""), ex.get("name")):
                 continue
             ex.pop("illustration", None)
             found = illustrations.match(ex.get("name", ""), ex.get("equipment", ""),
-                                        allowed.get(gym, {}))
+                                        pool.get(gym, {}))
             if found:
                 ex["illustration"] = found
             else:
                 missing.append((s, ex))
-    if missing and claude is not None and any(allowed.values()):
-        _ask_for_pictures(missing, allowed, equipment, claude, model, allow_replace)
-    left = [ex.get("name", "?") for s, ex in missing
-            if not ex.get("illustration")
-            and not _has_machine_photo(s["gym"], ex, photo_ids[s["gym"]], photos_dir)]
-    for name in left:
-        log.warning("exercise %r has no picture", name)
+    if missing and claude is not None and any(pool.values()):
+        _ask_for_pictures(missing, pool, equipment, claude, model, allow_replace,
+                          illustrations, photo_ids, photos_dir)
+    left = []
+    for s, ex in missing:
+        if ex.get("illustration"):
+            continue
+        if _has_machine_photo(s["gym"], ex, photo_ids[s["gym"]], photos_dir):
+            log.info("machine exercise %r has no illustration", ex.get("name", "?"))
+        else:
+            left.append(ex.get("name", "?"))
+            log.warning("exercise %r has no picture", ex.get("name", "?"))
     return left
 
 
-def _ask_for_pictures(missing, allowed, equipment, claude, model, allow_replace=True) -> None:
+def _ask_for_pictures(missing, allowed, equipment, claude, model, allow_replace,
+                      illustrations, photo_ids, photos_dir) -> None:
     lines = [f"{n}. {ex.get('name')} ({ex.get('equipment')}) at the {s['gym']} gym"
              for n, (s, ex) in enumerate(missing)]
     lists = "\n\n".join(
@@ -131,9 +141,11 @@ def _ask_for_pictures(missing, allowed, equipment, claude, model, allow_replace=
         + "\n".join(f"{i}: {n}" for i, n in allowed[g].items())
         for g in sorted({s["gym"] for s, _ in missing}) if allowed.get(g))
     prompt = (
-        "These exercises have no picture. For each, give the id of an illustration of that "
-        "same exercise from its gym's list, or, when none shows it, a replacement exercise "
-        "that has one (same muscle group, equipment from that gym's list).\n"
+        "These exercises have no illustration. For each, give the id of an illustration of that "
+        "same exercise from its gym's list (same kind of equipment, same body position), or, "
+        "when none shows it and the exercise is not a machine, a replacement exercise "
+        "that has one (same muscle group, equipment from that gym's list). "
+        "Leave an exercise out when nothing fits.\n"
         + "\n".join(lines) + "\n\n" + lists + "\n\nAnswer with JSON only: "
         '{"fixes": [{"n": 0, "illustration": "<id>"} or {"n": 1, "replace": {"name": "...", '
         '"equipment": "...", "illustration": "<id>"}}]}'
@@ -150,13 +162,18 @@ def _ask_for_pictures(missing, allowed, equipment, claude, model, allow_replace=
         except (KeyError, TypeError, ValueError, IndexError):
             continue
         gym = s["gym"]
-        if allow_replace and isinstance(fix.get("replace"), dict):
+        machine_photo = _has_machine_photo(gym, ex, photo_ids[gym], photos_dir)
+        if allow_replace and not machine_photo and isinstance(fix.get("replace"), dict):
             rep = fix["replace"]
             eq = str(rep.get("equipment", "")).strip().lower()
-            if rep.get("illustration") in allowed.get(gym, {}) and eq in equipment[gym]                     and rep.get("name"):
+            if (rep.get("illustration") in allowed.get(gym, {}) and eq in equipment[gym]
+                    and rep.get("name")
+                    and illustrations.fits(rep["illustration"], rep["equipment"], rep["name"])):
                 ex.update(name=str(rep["name"]), equipment=rep["equipment"],
                           illustration=rep["illustration"])
-        elif fix.get("illustration") in allowed.get(gym, {}):
+        elif (fix.get("illustration") in allowed.get(gym, {})
+              and illustrations.fits(fix["illustration"], ex.get("equipment", ""),
+                                     ex.get("name"))):
             ex["illustration"] = fix["illustration"]
 
 
