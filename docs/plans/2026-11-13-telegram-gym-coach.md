@@ -226,6 +226,13 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
   - What: make database use from the scheduler thread safe (for example one connection with `check_same_thread=False` guarded by a lock, or a separate Store for the thread). Pick the smaller change; no data loss, no schema change.
   - Done when: a new test runs a scheduler tick in a real second thread against a real Store file and it sends the session message (FakeTelegram); `pytest -q` and `ruff check .` pass; pushed. Do not start or stop the real bot.
 
+- [ ] **Task 9h: restart the real bot so it runs the Task 9g fix, then check its log** needs: Task 9g (slot 1 only)
+  - Found by the framework review, 2026-11-16: the bot process (`pythonw -m gym_coach`) started 13 Nov 03:48, before Task 9g landed at 13:00, so it still runs the old code. `data\bot.log` has 145 "SQLite objects created in a thread" errors, the last at 14:36 on 16 Nov.
+  - Brian, 2026-11-16 (framework review, question 2): "a)": the worker restarts the live program as part of the task and checks the log after.
+  - Files: none in git (read `data\bot.log`; never commit it or paste personal values from it).
+  - What: restart through the scheduled task only: `Stop-ScheduledTask gym-coach-bot`, confirm no `pythonw` process runs `-m gym_coach`, then `Start-ScheduledTask gym-coach-bot`. Never start the bot as the worker's own child process: run-worker stops the worker's children when the run ends.
+  - Done when: after the restart one `pythonw -m gym_coach` process runs with a start time after the restart; after at least 3 minutes `data\bot.log` shows no new "SQLite objects created in a thread" line (count before and after) and no new traceback; the bot process is still running when the worker hands back. Report the counts in the tick note.
+
 - [x] **Task 10: Brian creates the Telegram bot and fills `.env`** (ticked 2026-11-13 by the orchestrator: Brian, "API keys added"; the orchestrator saw TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY set without reading them; TELEGRAM_ALLOWED_USER_ID stays empty by decision, see Task 9a)
   - Files: `.env` (never committed).
   - Done when: `python -m gym_coach --check` prints "config ok" on slot 1.
