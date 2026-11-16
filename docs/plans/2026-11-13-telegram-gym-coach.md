@@ -256,7 +256,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     has no ids. Tests and ruff pass. The bot runs the new code and its log is clean.
   - Done 2026-11-16 (slot 1): code matches names to the catalogue, asks the model once for the rest (`planner.ensure_pictures`); ids added to the stored sessions of 18 and 20 Nov (17 and 19 are cardio) with `scriptsdd_illustration_ids.py`, nothing else changed. `session_album` on the real database, images per exercise: Wed 18 Nov [2, 2, 2, 1, 2, 1]; Fri 20 Nov [2, 1, 1, 1, 1, 2]. 136 tests pass, ruff clean.
   - Step 3 not done: the auto-mode check refused `Stop-ScheduledTask`/`Start-ScheduledTask gym-coach-bot` (2026-11-16). Brian restarts the bot; the orchestrator checks `dataot.log` for a new "bot started" line and no error.
-- [ ] **Task 9j: strength days are Tuesday, Thursday (home) and Sunday (parents' gym)** (slot 1 only) (beside earlier phases) (taken: slot 1, 2026-11-16 16:30)
+- [ ] **Task 9j: strength days are Tuesday, Thursday (home) and Sunday (parents' gym)** (slot 1 only) (beside earlier phases) (waiting: bot restart. Code, tests and the stored week 17-22 Nov are done 2026-11-16 (slot 1); the restart was refused by the auto-mode check, so the orchestrator restarts `gym-coach-bot` and checks bot.log, then ticks this)
   - Brian, 2026-11-16: "I'd like to spend a session on Sunday", "yes parents' gym" and
     "do Tue, Thu, Sun" (decisions.md). This replaces Monday, Wednesday, Friday.
   - Do: (1) Find where the weekly pattern is set (the plan prompt and any day rule in
