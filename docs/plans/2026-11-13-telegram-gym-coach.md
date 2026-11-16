@@ -420,7 +420,7 @@ still wait for Task 11.
   - Notes: Brian, 2026-11-17: "gym: drop it" (the waist question). No change to the database
     schema and no stored row is removed.
 
-- [ ] **Task 14c: exercise messages without the form tip** `[parallel-ok]`
+- [ ] **Task 14c: exercise messages without the form tip** `[parallel-ok]` (taken: slot 1, 2026-11-17 12:00)
   - Files: the module that builds each exercise message caption (find the form cue that is cut at
     about 150 characters) and its tests.
   - Done when: tests pass: an exercise message caption holds the task line (name, sets, reps,
