@@ -409,7 +409,7 @@ still wait for Task 11.
     through the router with the fakes, and asserts that no model call happens and both replies
     state the limit; `/cost` still works.
 
-- [ ] **Task 14b: the weekly check-in asks for weight only** `[parallel-ok]` (taken: slot 1, 2026-11-17 09:00)
+- [ ] **Task 14b: the weekly check-in asks for weight only** `[parallel-ok]` (waiting: bot restart refused by the auto-mode check 2026-11-17; code and tests done, slot 1, 148 tests and ruff pass; orchestrator or Brian restarts gym-coach-bot and checks databot.log for "bot started" and no error after)
   - Files: modify `src\gym_coach\scheduler.py` (the Monday prompt), `src\gym_coachouter.py`
     (the "did not catch your weight" reply and the router prompt's wording), `tests	est_body.py`.
   - Done when: tests pass: the Monday 07:00 prompt and the "did not catch" reply name body weight

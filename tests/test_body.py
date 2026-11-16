@@ -37,7 +37,7 @@ def test_monday_seven_sends_one_prompt(store):
     sched = Scheduler(store, sent.append, now=lambda: MONDAY)
     sched.tick()
     sched.tick()
-    assert len(sent) == 1 and "weight" in sent[0] and "waist" in sent[0]
+    assert len(sent) == 1 and "body weight" in sent[0] and "81.6 kg" in sent[0] and "waist" not in sent[0]
 
 
 def test_no_prompt_before_seven_or_on_other_days(store):
@@ -45,6 +45,13 @@ def test_no_prompt_before_seven_or_on_other_days(store):
     Scheduler(store, sent.append, now=lambda: MONDAY.replace(hour=6, minute=59)).tick()
     Scheduler(store, sent.append, now=lambda: MONDAY.replace(day=17)).tick()
     assert sent == []
+
+
+def test_weight_alone_stores_one_row(store):
+    router, _ = make(store, [body(81.6)])
+    router.handle("81.6 kg")
+    router.handle("yes")  # 81.6 is far from the example profile's 70 kg
+    assert [(r["weight_kg"], r["waist_cm"]) for r in store.body_entries()] == [(81.6, None)]
 
 
 def test_weight_and_waist_store_one_row(store):
@@ -87,5 +94,6 @@ def test_jump_is_measured_from_the_last_stored_weight(store):
 
 def test_missing_weight_asks_again(store):
     router, _ = make(store, [body(None, 90)])
-    assert "did not catch" in router.handle("waist 90")
+    reply = router.handle("waist 90")
+    assert "did not catch" in reply and "81.6 kg" in reply and "waist" not in reply
     assert store.body_entries() == []

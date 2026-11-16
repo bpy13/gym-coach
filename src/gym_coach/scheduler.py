@@ -37,8 +37,8 @@ class Scheduler:
         marker = f"sent:body:{day}"
         if self.store.get(marker):
             return
-        self.send('Weekly check-in: what is your body weight and waist today? '
-                  'Reply like "81.6 kg, waist 91".')
+        self.send('Weekly check-in: what is your body weight today? '
+                  'Reply like "81.6 kg".')
         self.store.set(marker, "1")
 
     def _send_session(self, day: str) -> None:

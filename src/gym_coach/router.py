@@ -12,7 +12,7 @@ from gym_coach.messages import proposal_message
 CLASSIFY_SYSTEM = """You read one message from a gym-goer to his coach bot and classify it.
 Intents: report (he reports sets he did), correction (he fixes a set he already reported),
 approve (he accepts the proposed plan), change_plan (he asks to change the proposed plan),
-skip (he skips today's session), body (body weight or waist), progress (asks for his numbers),
+skip (he skips today's session), body (body weight; a waist he mentions is still stored), progress (asks for his numbers),
 meal (he says what he ate), meal_correction (he fixes the calories or protein of the last meal),
 question (anything else).
 Answer JSON: {"intent": "<one intent>", "sets": [{"exercise": "...", "weight_kg": 35,
@@ -202,7 +202,7 @@ class Router:
         weight = _number(weight)
         waist = _number(waist)
         if weight is None:
-            return 'I did not catch your weight. Say e.g. "81.6 kg, waist 91".'
+            return 'I did not catch your weight. Say e.g. "81.6 kg".'
         last = targets.current_targets(self.store, self._profile()).weight_kg
         if abs(weight - last) > BODY_JUMP_KG:
             self.store.set(PENDING_BODY, f"{weight}|{'' if waist is None else waist}")
