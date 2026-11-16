@@ -335,6 +335,17 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     nothing written to the real database) gives the list message, then six exercise messages
     one per completing reply; all tests pass; and after the last start `data\bot.log` shows
     no new error.
+- [ ] **Task 9m: cardio days are Monday, Wednesday and Friday** `[parallel-ok]` (slot 1 only) (beside earlier phases)
+  - Brian, 2026-11-16: "cardio should be Mon Wed Fri" (decisions.md). Strength stays Tuesday,
+    Thursday (home) and Sunday (parents' gym) (Task 9j). Saturday has no session.
+  - Do: (1) In the day rule and the plan prompt (`planner.py`, `prompts.py`): cardio on Monday,
+    Wednesday and Friday at the home gym, and on no other day. (2) On the real `data\gym.db`
+    (back it up first) remove the proposed cardio row of Saturday 21 Nov; leave 18 and 20 Nov
+    and every strength row as they are. (3) Restart the bot through its scheduled task if code
+    it loads changed; if the restart is refused, say so in the ENDED message and stop there.
+  - Done when: a test shows a proposed week has cardio only on Monday, Wednesday and Friday
+    and strength only on Tuesday, Thursday and Sunday; the real database has no row for 21 Nov
+    and the rows of 17, 18, 19, 20 and 22 Nov are unchanged; all tests pass.
 
 - [x] **Task 10: Brian creates the Telegram bot and fills `.env`** (ticked 2026-11-13 by the orchestrator: Brian, "API keys added"; the orchestrator saw TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY set without reading them; TELEGRAM_ALLOWED_USER_ID stays empty by decision, see Task 9a)
   - Files: `.env` (never committed).
