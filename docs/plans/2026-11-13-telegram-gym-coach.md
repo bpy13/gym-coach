@@ -309,6 +309,32 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     its sets, reps and weight; every exercise has at least one picture; tests cover the caption
     rule; and after the last start `data\bot.log` shows no new error. Do not send anything to
     Brian's chat as a test.
+- [ ] **Task 9l: a strength session shows one exercise at a time; the next comes when Brian reports** `[parallel-ok]` (slot 1 only) (beside earlier phases)
+  - Brian, 2026-11-16, on seeing the per-exercise messages of Task 9k all at once: "should show
+    1 at a time, and as I report my progress and during resting, show next" (decisions.md).
+  - Do: (1) At the session time the bot sends one text message: gym, date and the list of
+    exercises (name, sets x reps at weight, no pictures), ending "Send start when you begin."
+    (2) On "start" (any case) it sends the first exercise message (Task 9k's: pictures and one
+    caption). (3) Each reply of Brian's is logged against the exercise now shown, as today's
+    reports are (sets, reps, weight, how hard). When the reply completes that exercise (the
+    logged sets reach the planned sets, or he writes "next", "done" or "skip"), the bot answers
+    in one short line what it logged and at once sends the next exercise message, so he reads
+    it while resting. A reply that leaves sets open gets the short logged line and how many sets
+    remain; nothing else. After the last exercise it sends the closing summary of the session.
+    (4) Which exercise is shown is stored in the database (it survives a bot restart); a new
+    day's session starts fresh; a reply when no session is open is handled as today. Cardio
+    stays one text message. (5) The orchestrator's calls, which Brian may change: the list
+    message plus "start" (he trains in the late afternoon, so the first exercise should arrive
+    when he begins, not at 07:00), and the words next, done, skip. Record them in decisions.md
+    as "(orchestrator's call, 2026-11-16; Brian may change it)". (6) Restart the bot through its
+    scheduled task; if the restart is refused, say so in the ENDED message and stop there.
+  - Done when: a test drives a whole stored session through the router with a fake Telegram
+    (list message, start, reports that complete each exercise, next, skip, a restart in the
+    middle) and sees exactly one exercise message after each completing reply and the summary
+    at the end; on the real `data\gym.db` a dry run of 17 Nov (nothing sent to Brian's chat,
+    nothing written to the real database) gives the list message, then six exercise messages
+    one per completing reply; all tests pass; and after the last start `data\bot.log` shows
+    no new error.
 
 - [x] **Task 10: Brian creates the Telegram bot and fills `.env`** (ticked 2026-11-13 by the orchestrator: Brian, "API keys added"; the orchestrator saw TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY set without reading them; TELEGRAM_ALLOWED_USER_ID stays empty by decision, see Task 9a)
   - Files: `.env` (never committed).
