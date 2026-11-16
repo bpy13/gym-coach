@@ -335,6 +335,11 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     nothing written to the real database) gives the list message, then six exercise messages
     one per completing reply; all tests pass; and after the last start `data\bot.log` shows
     no new error.
+  - CHANGE (Brian, 2026-11-16: "Send at 07:00", to the question whether the first exercise
+    should come on "start" instead of at 07:00): there is no "start" step. At the session time
+    the bot sends the list message (without the "Send start" line) and right after it the first
+    exercise message. This replaces steps (1), (2) and the first call in (5) above, and the
+    word start in the Done-when test.
 - [ ] **Task 9m: cardio days are Monday, Wednesday and Friday** `[parallel-ok]` (slot 1 only) (beside earlier phases)
   - Brian, 2026-11-16: "cardio should be Mon Wed Fri" (decisions.md). Strength stays Tuesday,
     Thursday (home) and Sunday (parents' gym) (Task 9j). Saturday has no session.
