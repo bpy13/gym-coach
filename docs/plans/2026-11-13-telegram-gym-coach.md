@@ -233,6 +233,28 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
   - What: restart through the scheduled task only: `Stop-ScheduledTask gym-coach-bot`, confirm no `pythonw` process runs `-m gym_coach`, then `Start-ScheduledTask gym-coach-bot`. Never start the bot as the worker's own child process: run-worker stops the worker's children when the run ends.
   - Done when: after the restart one `pythonw -m gym_coach` process runs with a start time after the restart; after at least 3 minutes `data\bot.log` shows no new "SQLite objects created in a thread" line (count before and after) and no new traceback; the bot process is still running when the worker hands back. Report the counts in the tick note.
 
+- [ ] **Task 9i: every exercise in a session message gets a picture** (slot 1 only)
+  - Brian, 2026-11-16: "shouldn't the gym bot also send illustration?" and "I've requested an image
+    or an illustration for each of the workout task" (decisions of 2026-11-13, Tasks 9e and 9f).
+  - Symptom (checked by the orchestrator on the real `data\gym.db`, 2026-11-16): no exercise in
+    `plan_sessions` carries an `illustration` id, so `session_album` returns pictures for machine
+    exercises only: 5 of 6 on Mon 16 Nov, 2 of 6 on Wed 18 Nov, 4 of 6 on Fri 20 Nov. The week was
+    proposed on 13 Nov, before Task 9f; and the prompt lets the model leave the id out.
+  - Do: (1) After a proposal, code (not the model) makes sure every strength exercise has either
+    Brian's machine photo or an illustration id from that gym's list: match by exercise name
+    against the catalogue; when nothing matches, ask the model once for the id or for another
+    exercise that has one, and log what stays without a picture. (2) Add the ids to the sessions
+    already stored for 17 to 20 Nov; change nothing else in them (exercises, sets, weights,
+    status). (3) Restart the bot through its scheduled task (`Stop-ScheduledTask`, then
+    `Start-ScheduledTask gym-coach-bot`) and check `dataot.log`: a new "bot started" line and no
+    new error after it.
+  - Files: `src\gym_coach\planner.py`, `src\gym_coach\illustrations.py`, `src\gym_coach\prompts.py`,
+    their tests; a one-off script under `scripts\` for step 2.
+  - Done when (on the real database, not tests alone): for each strength session of 17 to 20 Nov,
+    `session_album` returns at least one picture per exercise; write the count per day here
+    (exercise names and counts only, no personal values). Tests cover a proposal whose model answer
+    has no ids. Tests and ruff pass. The bot runs the new code and its log is clean.
+
 - [x] **Task 10: Brian creates the Telegram bot and fills `.env`** (ticked 2026-11-13 by the orchestrator: Brian, "API keys added"; the orchestrator saw TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY set without reading them; TELEGRAM_ALLOWED_USER_ID stays empty by decision, see Task 9a)
   - Files: `.env` (never committed).
   - Done when: `python -m gym_coach --check` prints "config ok" on slot 1.
