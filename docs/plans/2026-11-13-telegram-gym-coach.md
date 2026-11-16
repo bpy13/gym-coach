@@ -340,7 +340,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     the bot sends the list message (without the "Send start" line) and right after it the first
     exercise message. This replaces steps (1), (2) and the first call in (5) above, and the
     word start in the Done-when test.
-- [ ] **Task 9m: cardio days are Monday, Wednesday and Friday** `[parallel-ok]` (slot 1 only) (beside earlier phases) (waiting: code and test done 2026-11-16 (slot 1), 147 tests pass, ruff clean; the delete of the 21 Nov row in datagym.db was refused by the auto-mode check (backup datagym.db.bak-9m exists); the orchestrator deletes that row and restarts `gym-coach-bot`, checks bot.log, then ticks this)
+- [ ] **Task 9m: cardio days are Monday, Wednesday and Friday** `[parallel-ok]` (slot 1 only) (beside earlier phases) (waiting: Brian; code and test done 2026-11-16 (slot 1), 147 tests pass, ruff clean; the delete of the 21 Nov row in datagym.db was refused by the auto-mode check (backup datagym.db.bak-9m exists); Brian removes the 21 Nov cardio row and restarts the bot. Delete command, from the project folder: `conda run -n gym-coach python -c "import sqlite3; c=sqlite3.connect('data/gym.db'); c.execute(\"delete from plan_sessions where date='2026-11-21' and kind='cardio'\"); c.commit()"`; then restart `gym-coach-bot` and check bot.log, then tick this)
   - Brian, 2026-11-16: "cardio should be Mon Wed Fri" (decisions.md). Strength stays Tuesday,
     Thursday (home) and Sunday (parents' gym) (Task 9j). Saturday has no session.
   - Do: (1) In the day rule and the plan prompt (`planner.py`, `prompts.py`): cardio on Monday,
