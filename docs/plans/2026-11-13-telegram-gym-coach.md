@@ -277,7 +277,7 @@ still wait for Task 11.
     toast") is logged the same way; add the `meal` intent to the router. The reply says
     estimates from photos are rough.
 
-- [ ] **Task 14: weekly body numbers** needs: Task 13 (beside earlier phases)
+- [ ] **Task 14: weekly body numbers** needs: Task 13 (beside earlier phases) (taken: slot 1, 2026-11-16 15:10)
   - Files: modify `src\gym_coach\router.py`, `src\gym_coach\scheduler.py`; create
     `tests\test_body.py`.
   - Done when: tests pass: Monday 07:00 sends one prompt for weight and waist; "81.6 kg, waist
