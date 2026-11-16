@@ -25,6 +25,7 @@ class Config:
     model_coach: str = "claude-opus-5-5"
     data_dir: str = "data"
     photos_dir: str = "photos"
+    show_form_tip: bool = False  # form cue under each exercise message; off for now
 
     def __repr__(self) -> str:
         return "Config(<secrets hidden>)"
@@ -84,4 +85,5 @@ def load_config(env_path: Path | str = ".env", environ: dict[str, str] | None = 
         model_coach=get("MODEL_COACH", "claude-opus-5-5"),
         data_dir=get("DATA_DIR", "data"),
         photos_dir=get("PHOTOS_DIR", "photos"),
+        show_form_tip=get("SHOW_FORM_TIP", "").lower() in ("1", "true", "yes", "on"),
     )

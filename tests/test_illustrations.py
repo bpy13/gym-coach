@@ -124,7 +124,7 @@ def test_exercise_message_has_machine_photo_and_two_illustrations_under_one_capt
         ex("Goblet squat", "dumbbells on a rack", illustration="Goblet_Squat"),
         ex("Mystery", "dumbbells on a rack", illustration="Not_In_Db"),
         ex("Plain", "dumbbells on a rack")]}
-    parts = session_parts(session, eq, photos, illustrations=i)
+    parts = session_parts(session, eq, photos, illustrations=i, show_tip=True)
     assert len(parts) == 4 + 2
     body = parts[1:-1]
     assert [len(imgs) for _, imgs in body] == [1, 2, 0, 0]
@@ -307,3 +307,14 @@ def test_machine_exercise_with_photo_gets_an_illustration_by_name(tmp_path):
                            equipment_path=eq, photos_dir=tmp_path / "photos")
     assert left == []  # both have the machine photo
     assert [e.get("illustration") for e in sessions[0]["exercises"]] == ["Leg_Ext", None]
+
+
+def test_caption_has_no_form_tip_by_default(ill, gym_files):
+    i, _ = ill
+    eq, photos = gym_files
+    session = {"date": "2026-11-17", "gym": "home", "kind": "strength", "exercises": [
+        ex("Goblet squat", "dumbbells on a rack", illustration="Goblet_Squat")]}
+    (caption, imgs), = session_parts(session, eq, photos, illustrations=i)[1:-1]
+    assert caption == "Goblet squat: 3 x 8-12 at 10 kg" and len(imgs) == 2
+    (caption, _), = session_parts(session, eq, photos, illustrations=i, show_tip=True)[1:-1]
+    assert caption.split(chr(10), 1)[1].startswith("Hold one dumbbell")

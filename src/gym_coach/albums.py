@@ -49,19 +49,20 @@ def _pictures(ex: dict, ids: dict, photos_dir, gym: str, illustrations) -> tuple
 
 
 def exercise_parts(session: dict, index: int, equipment_path=None, photos_dir=None,
-                   illustrations=None) -> tuple[str, list[bytes]]:
+                   illustrations=None, show_tip: bool = False) -> tuple[str, list[bytes]]:
     """The message of exercise number `index` of a strength session, as (caption, jpeg images):
-    its pictures, if any, with ONE caption (name, sets x reps at weight, form cue)."""
+    its pictures, if any, with ONE caption (name, sets x reps at weight; the form cue only when
+    `show_tip` is on, default off)."""
     ids = equipment_photo_ids(session["gym"], equipment_path or DEFAULT_EQUIPMENT)
     ex = session["exercises"][index]
     images, cue = _pictures(ex, ids, photos_dir or DEFAULT_PHOTOS, session["gym"], illustrations)
     if not images:
         log.warning("exercise %r goes out without a picture", ex.get("name"))
-    return exercise_line(ex) + (f"{NL}{cue}" if cue else ""), images
+    return exercise_line(ex) + (f"{NL}{cue}" if cue and show_tip else ""), images
 
 
 def session_parts(session: dict, equipment_path=None, photos_dir=None, illustrations=None,
-                  closing: bool = True) -> list[tuple[str, list[bytes]]]:
+                  closing: bool = True, show_tip: bool = False) -> list[tuple[str, list[bytes]]]:
     """All messages of a session at once, in order, as (text, jpeg images). Used for the
     proposal's preview; the daily session goes out one exercise at a time (the router).
 
@@ -73,7 +74,8 @@ def session_parts(session: dict, equipment_path=None, photos_dir=None, illustrat
         return [(session_message(session), [])]
     parts: list[tuple[str, list[bytes]]] = [(head(session), [])]
     for i in range(len(session["exercises"])):
-        parts.append(exercise_parts(session, i, equipment_path, photos_dir, illustrations))
+        parts.append(exercise_parts(session, i, equipment_path, photos_dir, illustrations,
+                                    show_tip))
     if closing:
         parts.append((CLOSING, []))
     return parts

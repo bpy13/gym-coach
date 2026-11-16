@@ -185,11 +185,12 @@ def build(config: Config) -> tuple[App, Scheduler, Store]:
                               on_pair=lambda uid: store.set("owner_id", str(uid)))
     def parts_for(session, closing=True):
         return session_parts(session, photos_dir=Path(config.photos_dir),
-                             illustrations=illustrations, closing=closing)
+                             illustrations=illustrations, closing=closing,
+                             show_tip=config.show_form_tip)
 
     def exercise_for(session, index):
         return exercise_parts(session, index, photos_dir=Path(config.photos_dir),
-                              illustrations=illustrations)
+                              illustrations=illustrations, show_tip=config.show_form_tip)
 
     app = App(telegram, router, store, parts_for=parts_for, exercise_for=exercise_for)
     scheduler = Scheduler(store, app.send_to_owner, config.session_time, config.timezone,
