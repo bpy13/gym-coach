@@ -257,7 +257,7 @@ Brian, 2026-11-16: "Yes, build now". Tasks 12 to 15 (code and tests only) are bu
 milestone 1's live check (Task 11); they count as serving the current milestone. Task 16 and Phase 3
 still wait for Task 11.
 
-- [ ] **Task 12: daily calorie and protein targets** (beside earlier phases)
+- [ ] **Task 12: daily calorie and protein targets** (beside earlier phases) (taken: slot 1, 2026-11-16 15:00)
   - Files: create `src\gym_coach\targets.py`, `tests\test_targets.py`.
   - Done when: tests pass for the formula on the made-up profile, including: the weekly loss
     implied by the deficit never exceeds 1% of body weight; protein is 1.8 g per kg of body
