@@ -410,12 +410,12 @@ still wait for Task 11.
     state the limit; `/cost` still works.
 
 - [ ] **Task 14b: the weekly check-in asks for weight only** `[parallel-ok]` (taken: slot 1, 2026-11-17 09:00)
-  - Files: modify `src\gym_coach\scheduler.py` (the Monday prompt), `src\gym_coachouter.py`
-    (the "did not catch your weight" reply and the router prompt's wording), `tests	est_body.py`.
+  - Files: modify `src\gym_coach\scheduler.py` (the Monday prompt), `src\gym_coach\router.py`
+    (the "did not catch your weight" reply and the router prompt's wording), `tests\test_body.py`.
   - Done when: tests pass: the Monday 07:00 prompt and the "did not catch" reply name body weight
     only and give the example "81.6 kg"; "81.6 kg" stores one `body` row; "81.6 kg and 91 cm
     round the middle" still stores both numbers (the column and the stored rows stay). Then
-    restart the bot through its scheduled task, as in Task 9k, and read `dataot.log`: "bot
+    restart the bot through its scheduled task, as in Task 9k, and read `data\bot.log`: "bot
     started" and no error after it.
   - Notes: Brian, 2026-11-17: "gym: drop it" (the waist question). No change to the database
     schema and no stored row is removed.
