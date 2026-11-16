@@ -233,7 +233,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
   - What: restart through the scheduled task only: `Stop-ScheduledTask gym-coach-bot`, confirm no `pythonw` process runs `-m gym_coach`, then `Start-ScheduledTask gym-coach-bot`. Never start the bot as the worker's own child process: run-worker stops the worker's children when the run ends.
   - Done when: after the restart one `pythonw -m gym_coach` process runs with a start time after the restart; after at least 3 minutes `data\bot.log` shows no new "SQLite objects created in a thread" line (count before and after) and no new traceback; the bot process is still running when the worker hands back. Report the counts in the tick note.
 
-- [ ] **Task 9i: every exercise in a session message gets a picture** (slot 1 only) (taken: slot 1, 2026-11-16 16:03)
+- [ ] **Task 9i: every exercise in a session message gets a picture** (slot 1 only) (waiting: Brian restarts the bot; orchestrator checks bot.log)
   - Brian, 2026-11-16: "shouldn't the gym bot also send illustration?" and "I've requested an image
     or an illustration for each of the workout task" (decisions of 2026-11-13, Tasks 9e and 9f).
   - Symptom (checked by the orchestrator on the real `data\gym.db`, 2026-11-16): no exercise in
@@ -254,6 +254,8 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     `session_album` returns at least one picture per exercise; write the count per day here
     (exercise names and counts only, no personal values). Tests cover a proposal whose model answer
     has no ids. Tests and ruff pass. The bot runs the new code and its log is clean.
+  - Done 2026-11-16 (slot 1): code matches names to the catalogue, asks the model once for the rest (`planner.ensure_pictures`); ids added to the stored sessions of 18 and 20 Nov (17 and 19 are cardio) with `scriptsdd_illustration_ids.py`, nothing else changed. `session_album` on the real database, images per exercise: Wed 18 Nov [2, 2, 2, 1, 2, 1]; Fri 20 Nov [2, 1, 1, 1, 1, 2]. 136 tests pass, ruff clean.
+  - Step 3 not done: the auto-mode check refused `Stop-ScheduledTask`/`Start-ScheduledTask gym-coach-bot` (2026-11-16). Brian restarts the bot; the orchestrator checks `dataot.log` for a new "bot started" line and no error.
 
 - [x] **Task 10: Brian creates the Telegram bot and fills `.env`** (ticked 2026-11-13 by the orchestrator: Brian, "API keys added"; the orchestrator saw TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY set without reading them; TELEGRAM_ALLOWED_USER_ID stays empty by decision, see Task 9a)
   - Files: `.env` (never committed).
