@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from gym_coach import planner, reports
-from gym_coach.context import profile_text
+from gym_coach import meals, planner, reports
+from gym_coach.context import DEFAULT_PROFILE, profile_text
 from gym_coach.llm import HK, CeilingReached, LLMError
 from gym_coach.messages import proposal_message
 
@@ -13,9 +13,11 @@ CLASSIFY_SYSTEM = """You read one message from a gym-goer to his coach bot and c
 Intents: report (he reports sets he did), correction (he fixes a set he already reported),
 approve (he accepts the proposed plan), change_plan (he asks to change the proposed plan),
 skip (he skips today's session), body (body weight or waist), progress (asks for his numbers),
+meal (he says what he ate), meal_correction (he fixes the calories or protein of the last meal),
 question (anything else).
 Answer JSON: {"intent": "<one intent>", "sets": [{"exercise": "...", "weight_kg": 35,
-"reps": 10, "effort": null}], "change": "<the requested change, for change_plan>"}
+"reps": 10, "effort": null}], "change": "<the requested change, for change_plan>",
+"kcal": <number, for meal_correction>, "protein_g": <number or null, for meal_correction>}
 "sets" has one entry per set: expand "3x10 at 40 kg" into three entries and "35kg 10 10 8" into
 three entries. For a correction list every set of each exercise he corrects, with the corrected
 values. Use an empty list when there are no sets."""
@@ -43,8 +45,15 @@ class Router:
 
     def handle(self, text: str) -> str:
         """Reply text for one message from the allowed user."""
+        return self._guarded(self._handle, text.strip())
+
+    def handle_photo(self, jpeg: bytes, caption: str | None = None) -> str:
+        """Reply to a meal photo (the caption, e.g. "half portion", goes to the model)."""
+        return self._guarded(self._meal, caption, jpeg)
+
+    def _guarded(self, fn, *args) -> str:
         try:
-            return self._handle(text.strip())
+            return fn(*args)
         except CeilingReached:
             return (f"This month's US${self.claude.ceiling_usd:g} limit on AI calls is reached. "
                     "I can't read new messages until next month; /today and /cost still work.")
@@ -89,9 +98,28 @@ class Router:
                 return "There is no session planned today."
             self.store.set_plan_status(day, "skipped")
             return "Skipped today's session."
+        if intent == "meal":
+            return self._meal(text)
+        if intent == "meal_correction":
+            try:
+                fixed = meals.correct_last(self.store, day, data.get("kcal"),
+                                           data.get("protein_g"))
+            except LLMError:
+                fixed = False
+            if not fixed:
+                return "I could not tell what to correct. Say e.g. \"that was 400 kcal\"."
+            return "Corrected the last meal. " + meals.total_line(self.store, day, self._profile())
         if intent in ("body", "progress"):
             return "That is coming soon."
         return self._answer(text)
+
+    def _profile(self):
+        return self._profile_path or DEFAULT_PROFILE
+
+    def _meal(self, text: str | None, jpeg: bytes | None = None) -> str:
+        now = self._now().astimezone(HK)
+        meal = meals.log_meal(self.store, self.claude, self.fast, now, text, jpeg)
+        return meals.reply(self.store, now.date().isoformat(), meal, self._profile())
 
     def _propose(self, change: str | None = None) -> str:
         """Propose (or revise) the plan for the proposed week, else for next week."""

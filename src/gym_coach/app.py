@@ -66,9 +66,14 @@ class App:
         self.chat_id = chat_id
 
     def handle(self, incoming) -> None:
-        """Reply to one incoming message. Photos are not handled yet (milestone 2)."""
+        """Reply to one incoming message: a meal photo (kept in memory only) or text."""
         self.store.set("chat_id", str(incoming.chat_id))
         self.chat_id = incoming.chat_id
+        if incoming.photo_file_id:
+            jpeg = self.telegram.download_file(incoming.photo_file_id)
+            self.telegram.send_message(
+                incoming.chat_id, self.router.handle_photo(jpeg, incoming.caption))
+            return
         text = (incoming.text or "").strip()
         if not text:
             self.telegram.send_message(incoming.chat_id, "I can only read text for now.")

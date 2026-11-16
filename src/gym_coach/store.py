@@ -100,6 +100,16 @@ class Store:
             (timestamp, description, kcal, protein_g),
         )
 
+    def update_last_meal(self, date, kcal, protein_g=None) -> bool:
+        """Change the day's latest meal's kcal (and protein if given); False if there is none."""
+        meals = self.meals_on(date)
+        if not meals:
+            return False
+        self._run("UPDATE meals SET kcal=?, protein_g=? WHERE id=?",
+                  (kcal, meals[-1]["protein_g"] if protein_g is None else protein_g,
+                   meals[-1]["id"]))
+        return True
+
     def meals_on(self, date) -> list[dict]:
         return self._rows(
             "SELECT * FROM meals WHERE substr(timestamp,1,10)=? ORDER BY timestamp", (date,)

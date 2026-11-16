@@ -26,3 +26,4 @@
 - Task 9g, scheduler thread database crash (`store.py`): done 2026-11-13 (slot 1). One shared connection with a lock; new test runs a tick in a second thread. 108 tests pass, ruff clean. Not run on the real bot: Brian restarts it, orchestrator checks bot.log.
 - Task 9h, restart the real bot on the Task 9g fix: done 2026-11-16 (slot 1). Restarted through the scheduled task; after 3 minutes no new thread-error lines (149 before, 149 after) and no new traceback; bot still running.
 - Task 12, daily calorie and protein targets (`targets.py`): done 2026-11-16 (slot 1). 115 tests pass, ruff clean.
+- Task 13, meal photo estimates (`meals.py`, router `handle_photo` and `meal` intents): done 2026-11-16 (slot 1). 123 tests pass, ruff clean. Not run on the real bot.
