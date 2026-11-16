@@ -266,7 +266,7 @@ still wait for Task 11.
     a day, capped by the 1% rule. Pure code, no model call. Reads weight from the latest `body`
     row, falling back to the profile.
 
-- [ ] **Task 13: meal photo estimates** needs: Task 12 (beside earlier phases)
+- [ ] **Task 13: meal photo estimates** needs: Task 12 (beside earlier phases) (taken: slot 1, 2026-11-16 15:10)
   - Files: create `src\gym_coach\meals.py`, `tests\test_meals.py`; modify
     `src\gym_coach\router.py`.
   - Done when: tests pass with the fakes: a photo message leads to one fast-model call with
