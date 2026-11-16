@@ -246,7 +246,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     exercise that has one, and log what stays without a picture. (2) Add the ids to the sessions
     already stored for 17 to 20 Nov; change nothing else in them (exercises, sets, weights,
     status). (3) Restart the bot through its scheduled task (`Stop-ScheduledTask`, then
-    `Start-ScheduledTask gym-coach-bot`) and check `dataot.log`: a new "bot started" line and no
+    `Start-ScheduledTask gym-coach-bot`) and check `databot.log`: a new "bot started" line and no
     new error after it.
   - Files: `src\gym_coach\planner.py`, `src\gym_coach\illustrations.py`, `src\gym_coach\prompts.py`,
     their tests; a one-off script under `scripts\` for step 2.
@@ -255,7 +255,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     (exercise names and counts only, no personal values). Tests cover a proposal whose model answer
     has no ids. Tests and ruff pass. The bot runs the new code and its log is clean.
   - Done 2026-11-16 (slot 1): code matches names to the catalogue, asks the model once for the rest (`planner.ensure_pictures`); ids added to the stored sessions of 18 and 20 Nov (17 and 19 are cardio) with `scriptsdd_illustration_ids.py`, nothing else changed. `session_album` on the real database, images per exercise: Wed 18 Nov [2, 2, 2, 1, 2, 1]; Fri 20 Nov [2, 1, 1, 1, 1, 2]. 136 tests pass, ruff clean.
-  - Step 3 not done: the auto-mode check refused `Stop-ScheduledTask`/`Start-ScheduledTask gym-coach-bot` (2026-11-16). Brian restarts the bot; the orchestrator checks `dataot.log` for a new "bot started" line and no error.
+  - Step 3 not done: the auto-mode check refused `Stop-ScheduledTask`/`Start-ScheduledTask gym-coach-bot` (2026-11-16). Brian restarts the bot; the orchestrator checks `databot.log` for a new "bot started" line and no error.
 - [ ] **Task 9j: strength days are Tuesday, Thursday (home) and Sunday (parents' gym)** (slot 1 only) (beside earlier phases) (taken: slot 1, 2026-11-16 16:30)
   - Brian, 2026-11-16: "I'd like to spend a session on Sunday", "yes parents' gym" and
     "do Tue, Thu, Sun" (decisions.md). This replaces Monday, Wednesday, Friday.
@@ -276,7 +276,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
   - Done when: on the real database, 17 and 19 Nov are strength at home, 22 Nov is strength at
     parents' with at least one exercise on equipment the home gym lacks, no strength row on
     another day from 17 to 22 Nov, every strength exercise has a picture (count them with
-    `session_album`), tests pass, and `dataot.log` shows no new error after the last start.
+    `session_album`), tests pass, and `databot.log` shows no new error after the last start.
     Send the orchestrator the new sessions' dates, gyms and exercise names in the ENDED message.
 
 - [x] **Task 10: Brian creates the Telegram bot and fills `.env`** (ticked 2026-11-13 by the orchestrator: Brian, "API keys added"; the orchestrator saw TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY set without reading them; TELEGRAM_ALLOWED_USER_ID stays empty by decision, see Task 9a)
