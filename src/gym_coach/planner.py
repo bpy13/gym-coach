@@ -2,11 +2,22 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 
-from gym_coach.context import equipment_for, gym_for, profile_text
+from gym_coach.context import (
+    DEFAULT_EQUIPMENT,
+    DEFAULT_PHOTOS,
+    equipment_for,
+    equipment_photo_ids,
+    gym_for,
+    photo_file,
+    profile_text,
+)
+from gym_coach.llm import LLMError
 from gym_coach.prompts import CARDIO_SENTENCE, PLAN_SYSTEM, plan_prompt
 
+log = logging.getLogger(__name__)
 STRENGTH_PER_WEEK = 3
 
 
@@ -63,8 +74,92 @@ def _message(data: dict) -> str:
     return text
 
 
+def _has_machine_photo(gym, ex, ids, photos_dir) -> bool:
+    photo_id = ids.get(str(ex.get("equipment", "")).strip().lower())
+    return bool(photo_id and photo_file(gym, photo_id, photos_dir))
+
+
+def ensure_pictures(sessions: list[dict], illustrations, allowed: dict[str, dict[str, str]],
+                    equipment: dict[str, set[str]], claude=None, model: str | None = None,
+                    equipment_path=None, photos_dir=None,
+                    allow_replace: bool = True) -> list[str]:
+    """Make every strength exercise carry Brian's machine photo or a valid illustration id.
+
+    First by matching the exercise name against the gym's catalogue (code); what still has
+    nothing is put to the model once (an id, or a replacement exercise that has one).
+    Edits `sessions` in place; returns the names that still have no picture.
+    """
+    photos_dir = photos_dir or DEFAULT_PHOTOS
+    photo_ids = {g: equipment_photo_ids(g, equipment_path or DEFAULT_EQUIPMENT)
+                 for g in equipment}
+    missing = []  # (session, exercise)
+    for s in sessions:
+        if s["kind"] != "strength":
+            continue
+        gym = s["gym"]
+        for ex in s["exercises"]:
+            if _has_machine_photo(gym, ex, photo_ids[gym], photos_dir):
+                ex.pop("illustration", None)
+                continue
+            if ex.get("illustration") in allowed.get(gym, {}):
+                continue
+            ex.pop("illustration", None)
+            found = illustrations.match(ex.get("name", ""), ex.get("equipment", ""),
+                                        allowed.get(gym, {}))
+            if found:
+                ex["illustration"] = found
+            else:
+                missing.append((s, ex))
+    if missing and claude is not None and any(allowed.values()):
+        _ask_for_pictures(missing, allowed, equipment, claude, model, allow_replace)
+    left = [ex.get("name", "?") for s, ex in missing
+            if not ex.get("illustration")
+            and not _has_machine_photo(s["gym"], ex, photo_ids[s["gym"]], photos_dir)]
+    for name in left:
+        log.warning("exercise %r has no picture", name)
+    return left
+
+
+def _ask_for_pictures(missing, allowed, equipment, claude, model, allow_replace=True) -> None:
+    lines = [f"{n}. {ex.get('name')} ({ex.get('equipment')}) at the {s['gym']} gym"
+             for n, (s, ex) in enumerate(missing)]
+    lists = "\n\n".join(
+        f"{g} gym illustration ids (id: exercise):\n"
+        + "\n".join(f"{i}: {n}" for i, n in allowed[g].items())
+        for g in sorted({s["gym"] for s, _ in missing}) if allowed.get(g))
+    prompt = (
+        "These exercises have no picture. For each, give the id of an illustration of that "
+        "same exercise from its gym's list, or, when none shows it, a replacement exercise "
+        "that has one (same muscle group, equipment from that gym's list).\n"
+        + "\n".join(lines) + "\n\n" + lists + "\n\nAnswer with JSON only: "
+        '{"fixes": [{"n": 0, "illustration": "<id>"} or {"n": 1, "replace": {"name": "...", '
+        '"equipment": "...", "illustration": "<id>"}}]}'
+    )
+    try:
+        data = claude.json(model, prompt, system="You are a careful personal gym coach.")
+        fixes = data.get("fixes") or []
+    except (LLMError, AttributeError) as exc:  # the picture is a nicety: never block the proposal
+        log.warning("asking for exercise pictures failed: %s", exc)
+        return
+    for fix in fixes if isinstance(fixes, list) else []:
+        try:
+            s, ex = missing[int(fix["n"])]
+        except (KeyError, TypeError, ValueError, IndexError):
+            continue
+        gym = s["gym"]
+        if allow_replace and isinstance(fix.get("replace"), dict):
+            rep = fix["replace"]
+            eq = str(rep.get("equipment", "")).strip().lower()
+            if rep.get("illustration") in allowed.get(gym, {}) and eq in equipment[gym]                     and rep.get("name"):
+                ex.update(name=str(rep["name"]), equipment=rep["equipment"],
+                          illustration=rep["illustration"])
+        elif fix.get("illustration") in allowed.get(gym, {}):
+            ex["illustration"] = fix["illustration"]
+
+
 def propose(claude, store, model: str, week_start: date, change: str | None = None,
-            profile_path=None, equipment_path=None, illustrations=None) -> str:
+            profile_path=None, equipment_path=None, illustrations=None,
+            photos_dir=None) -> str:
     """Ask the coach model for a week plan, validate it, store it as `proposed`.
 
     One regeneration is allowed after a rejected answer; a second rejection raises PlanError.
@@ -91,10 +186,9 @@ def propose(claude, store, model: str, week_start: date, change: str | None = No
             error = str(exc)
     else:
         raise PlanError(f"Plan rejected twice: {error}")
-    for s in sessions:  # an illustration id that is not in the gym's list is dropped
-        for ex in s["exercises"]:
-            if ex.get("illustration") not in (ids or {}).get(s["gym"], ()):
-                ex.pop("illustration", None)
+    if illustrations is not None:  # code makes sure every exercise has a picture
+        ensure_pictures(sessions, illustrations, ids, equipment, claude, model,
+                        equipment_path, photos_dir)
     for d in dates:  # a new proposal replaces the old week
         store.delete_plan_session(d)
     for s in sessions:

@@ -23,6 +23,17 @@ _KINDS = (("dumbbell", "dumbbell"), ("cable", "cable"), ("ez curl", "e-z curl ba
           ("barbell", "barbell"))
 
 
+_STOP = {"the", "a", "with", "to", "on", "of", "and", "dumbbell", "cable", "barbell", "ez", "bar"}
+
+
+def _words(text: str) -> set[str]:
+    out = set()
+    for w in "".join(c if c.isalnum() else " " for c in str(text).lower()).split():
+        if w not in _STOP:
+            out.add(w[:-1] if len(w) > 3 and w.endswith("s") else w)
+    return out
+
+
 def _http_get(url: str) -> bytes:
     resp = httpx.get(url, timeout=20, follow_redirects=True)
     resp.raise_for_status()
@@ -85,3 +96,27 @@ class Illustrations:
                 log.warning("illustration %s could not be fetched", ex_id)
                 return []
         return out
+
+    def match(self, name: str, equipment: str, allowed: dict[str, str]) -> str | None:
+        """The id in `allowed` (id -> name) that shows the exercise `name`, or None.
+
+        Only entries whose database equipment fits the exercise's equipment name are
+        considered; the name must match exactly (ignoring case, plurals, filler words) or
+        share at least 70% of its words, or one name contains all words of the other (two or more).
+        """
+        kinds = {kind for word, kind in _KINDS if word in str(equipment).lower()}
+        want = _words(name)
+        best, best_score = None, 0.0
+        for i, n in allowed.items():
+            if (self.catalog().get(i) or {}).get("equipment") not in kinds:
+                continue
+            have = _words(n)
+            if not want or not have:
+                continue
+            score = len(want & have) / len(want | have)
+            small, large = sorted((want, have), key=len)
+            if len(small) >= 2 and small <= large:  # one name only adds detail to the other
+                score = max(score, 0.7)
+            if score > best_score:
+                best, best_score = i, score
+        return best if best_score >= 0.7 else None

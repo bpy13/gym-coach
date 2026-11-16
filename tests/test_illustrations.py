@@ -174,3 +174,67 @@ def test_send_album_splits_into_groups_of_ten():
     tg = TelegramClient("TOKEN", 1, client=httpx.Client(transport=httpx.MockTransport(handler)))
     tg.send_album(5, [(b"a", "x")] * 11)
     assert calls == ["sendMediaGroup", "sendPhoto"]
+
+
+def _propose(ill, tmp_path, exercises, replies=()):
+    i, _ = ill
+    store = Store(tmp_path / "t.db")
+    days = ("2026-11-16", "2026-11-18", "2026-11-20")
+    sessions = [{"date": d, "kind": "strength", "exercises": exercises} for d in days]
+    fake = FakeClaude([json.dumps({"message": "x", "sessions": sessions}), *replies])
+    now = datetime(2026, 11, 13, tzinfo=HK)
+    claude = Claude(fake, store, 5.0, now=lambda: now)
+    propose(claude, store, "claude-opus-5-5", date(2026, 11, 16),
+            profile_path="examples/profile.md", equipment_path="examples/equipment.md",
+            illustrations=i, photos_dir=tmp_path / "no-photos")
+    saved = store.plan_sessions("2026-11-16", "2026-11-22")
+    store.close()
+    return fake, saved
+
+
+def test_proposal_without_ids_gets_them_by_name_without_asking(ill, tmp_path):
+    fake, saved = _propose(ill, tmp_path, [
+        ex("Goblet Squats", "dumbbells on a rack"),
+        ex("cable row", "dual adjustable cable machine")])
+    assert [e.get("illustration") for e in saved[0]["exercises"]] == ["Goblet_Squat", "Cable_Row"]
+    assert len(fake.calls) == 1
+
+
+def test_unmatched_exercise_asks_model_once_for_id_or_replacement(ill, tmp_path):
+    reply = json.dumps({"fixes": [
+        {"n": 0, "illustration": "Goblet_Squat"},
+        {"n": 1, "replace": {"name": "Cable Row", "equipment": "dual adjustable cable machine",
+                             "illustration": "Cable_Row"}},
+        {"n": 2, "illustration": "Made_Up"}]})
+    fake, saved = _propose(ill, tmp_path, [
+        ex("Front loaded knee bend", "dumbbells on a rack"),
+        ex("Pull thing", "dual adjustable cable machine"),
+        ex("Odd", "dumbbells on a rack")], [reply])
+    got = saved[0]["exercises"]
+    assert [e.get("illustration") for e in got] == ["Goblet_Squat", "Cable_Row", None]
+    assert got[1]["name"] == "Cable Row" and got[1]["sets"] == 3
+    assert len(fake.calls) == 2
+
+
+def test_machine_with_photo_needs_no_illustration(ill, tmp_path):
+    i, _ = ill
+    from gym_coach.planner import ensure_pictures
+    eq, photos = tmp_path / "eq.md", tmp_path / "photos" / "home"
+    eq.write_text(EQUIPMENT, encoding="utf-8")
+    photos.mkdir(parents=True)
+    (photos / "IMG_A1.jpg").write_bytes(jpeg())
+    sessions = [{"date": "d", "gym": "home", "kind": "strength", "exercises": [
+        ex("Chest press", "chest press")]}]
+    left = ensure_pictures(sessions, i, {"home": {}, "parents": {}},
+                           {"home": {"chest press"}, "parents": set()},
+                           equipment_path=eq, photos_dir=tmp_path / "photos")
+    assert left == [] and "illustration" not in sessions[0]["exercises"][0]
+
+
+def test_match_ignores_equipment_words_and_extra_detail(ill):
+    i, _ = ill
+    allowed = i.allowed({"dumbbells on a rack", "dual adjustable cable machine"})
+    assert i.match("Dumbbell goblet squat", "dumbbells on a rack", allowed) == "Goblet_Squat"
+    assert i.match("Goblet squat at the wall", "dumbbells on a rack", allowed) == "Goblet_Squat"
+    assert i.match("Goblet squat", "dual adjustable cable machine", allowed) is None
+    assert i.match("Squat", "dumbbells on a rack", allowed) is None
