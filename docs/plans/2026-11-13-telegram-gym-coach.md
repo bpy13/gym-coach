@@ -409,6 +409,17 @@ still wait for Task 11.
     through the router with the fakes, and asserts that no model call happens and both replies
     state the limit; `/cost` still works.
 
+- [ ] **Task 14b: the weekly check-in asks for weight only** `[parallel-ok]`
+  - Files: modify `src\gym_coach\scheduler.py` (the Monday prompt), `src\gym_coachouter.py`
+    (the "did not catch your weight" reply and the router prompt's wording), `tests	est_body.py`.
+  - Done when: tests pass: the Monday 07:00 prompt and the "did not catch" reply name body weight
+    only and give the example "81.6 kg"; "81.6 kg" stores one `body` row; "81.6 kg and 91 cm
+    round the middle" still stores both numbers (the column and the stored rows stay). Then
+    restart the bot through its scheduled task, as in Task 9k, and read `dataot.log`: "bot
+    started" and no error after it.
+  - Notes: Brian, 2026-11-17: "gym: drop it" (the waist question). No change to the database
+    schema and no stored row is removed.
+
 - [ ] **Task 16: live check of meals** needs: Task 13, Task 14 (slot 1 only) (checkpoint) (waiting: inbox, 2026-11-16: bot restarted through the scheduled task at 15:31 on the Task 12-14 code, log clean; Brian sends one real meal photo at a real meal or session, question in docs/inbox.md. Slot 1 never committed this mark; the orchestrator restored it)
   - Done when: Brian sends one real meal photo and gets an estimate and a daily total; the
     month's cost in `/cost` rose by less than US$0.01 for that photo; the card asks Brian

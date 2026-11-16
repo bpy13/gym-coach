@@ -17,7 +17,7 @@ Done when:
 Done when:
 - Brian sends a meal photo; the bot replies with calories and protein and a running daily total
   against his daily targets.
-- The bot asks for body weight and waist once a week and records them.
+- The bot asks for body weight once a week and records it (waist dropped, Brian 2026-11-17).
 - The program stops calling Claude at US$5 in a month and says so in the chat.
 
 ## 3. Weekly review
