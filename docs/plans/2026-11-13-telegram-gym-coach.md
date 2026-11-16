@@ -253,7 +253,11 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
 
 ## Phase 2 – Meal photos and body numbers (sonnet)
 
-- [ ] **Task 12: daily calorie and protein targets** needs: Task 11
+Brian, 2026-11-16: "Yes, build now". Tasks 12 to 15 (code and tests only) are built now, beside
+milestone 1's live check (Task 11); they count as serving the current milestone. Task 16 and Phase 3
+still wait for Task 11.
+
+- [ ] **Task 12: daily calorie and protein targets** (beside earlier phases)
   - Files: create `src\gym_coach\targets.py`, `tests\test_targets.py`.
   - Done when: tests pass for the formula on the made-up profile, including: the weekly loss
     implied by the deficit never exceeds 1% of body weight; protein is 1.8 g per kg of body
@@ -262,7 +266,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     a day, capped by the 1% rule. Pure code, no model call. Reads weight from the latest `body`
     row, falling back to the profile.
 
-- [ ] **Task 13: meal photo estimates** needs: Task 12
+- [ ] **Task 13: meal photo estimates** needs: Task 12 (beside earlier phases)
   - Files: create `src\gym_coach\meals.py`, `tests\test_meals.py`; modify
     `src\gym_coach\router.py`.
   - Done when: tests pass with the fakes: a photo message leads to one fast-model call with
@@ -273,14 +277,14 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     toast") is logged the same way; add the `meal` intent to the router. The reply says
     estimates from photos are rough.
 
-- [ ] **Task 14: weekly body numbers** needs: Task 13
+- [ ] **Task 14: weekly body numbers** needs: Task 13 (beside earlier phases)
   - Files: modify `src\gym_coach\router.py`, `src\gym_coach\scheduler.py`; create
     `tests\test_body.py`.
   - Done when: tests pass: Monday 07:00 sends one prompt for weight and waist; "81.6 kg, waist
     91" stores one `body` row; a weight more than 5 kg from the last one is questioned before it
     is stored.
 
-- [ ] **Task 15: ceiling check end to end** needs: Task 13 `[parallel-ok]`
+- [ ] **Task 15: ceiling check end to end** needs: Task 13 `[parallel-ok]` (beside earlier phases)
   - Files: create `tests\test_ceiling_e2e.py`.
   - Done when: the test seeds `api_calls` to US$5.00 for the month, sends a photo and a report
     through the router with the fakes, and asserts that no model call happens and both replies
