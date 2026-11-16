@@ -420,6 +420,16 @@ still wait for Task 11.
   - Notes: Brian, 2026-11-17: "gym: drop it" (the waist question). No change to the database
     schema and no stored row is removed.
 
+- [ ] **Task 14c: exercise messages without the form tip** `[parallel-ok]`
+  - Files: the module that builds each exercise message caption (find the form cue that is cut at
+    about 150 characters) and its tests.
+  - Done when: tests pass: an exercise message caption holds the task line (name, sets, reps,
+    weight) and no form tip; one setting (default off) turns the tip back on, with a test for
+    each state. The stored tips stay in the data. The bot restart follows Task 14b's (same
+    scheduled task); if the restart is refused, mark the task waiting on Brian's restart.
+  - Notes: Brian, 2026-11-17: "gym: tip can be for later, drop it for now, and reconsider when I
+    request".
+
 - [ ] **Task 16: live check of meals** needs: Task 13, Task 14 (slot 1 only) (checkpoint) (waiting: inbox, 2026-11-16: bot restarted through the scheduled task at 15:31 on the Task 12-14 code, log clean; Brian sends one real meal photo at a real meal or session, question in docs/inbox.md. Slot 1 never committed this mark; the orchestrator restored it)
   - Done when: Brian sends one real meal photo and gets an estimate and a daily total; the
     month's cost in `/cost` rose by less than US$0.01 for that photo; the card asks Brian
