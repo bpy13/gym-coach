@@ -29,3 +29,4 @@
 - Task 13, meal photo estimates (`meals.py`, router `handle_photo` and `meal` intents): done 2026-11-16 (slot 1). 123 tests pass, ruff clean. Not run on the real bot.
 - Task 14, weekly body numbers (`router.py` body intent, `scheduler.py` Monday prompt): done 2026-11-16 (slot 1). 131 tests pass, ruff clean. Not run on the real bot.
 - Task 15, ceiling check end to end (`tests/test_ceiling_e2e.py`): done 2026-11-16 (slot 2). 124 tests pass, ruff clean.
+- Task 11, live check with the real bot: done 2026-11-16 (slot 1). Bot runs; first week stored as proposed, uses only listed equipment; month cost US$0.07; 132 tests pass, ruff clean. Brian still approves the schedule in the chat and logs one real session per gym.
