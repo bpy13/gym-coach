@@ -246,7 +246,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     exercise that has one, and log what stays without a picture. (2) Add the ids to the sessions
     already stored for 17 to 20 Nov; change nothing else in them (exercises, sets, weights,
     status). (3) Restart the bot through its scheduled task (`Stop-ScheduledTask`, then
-    `Start-ScheduledTask gym-coach-bot`) and check `dataot.log`: a new "bot started" line and no
+    `Start-ScheduledTask gym-coach-bot`) and check `databot.log`: a new "bot started" line and no
     new error after it.
   - Files: `src\gym_coach\planner.py`, `src\gym_coach\illustrations.py`, `src\gym_coach\prompts.py`,
     their tests; a one-off script under `scripts\` for step 2.
@@ -276,7 +276,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
   - Done when: on the real database, 17 and 19 Nov are strength at home, 22 Nov is strength at
     parents' with at least one exercise on equipment the home gym lacks, no strength row on
     another day from 17 to 22 Nov, every strength exercise has a picture (count them with
-    `session_album`), tests pass, and `dataot.log` shows no new error after the last start.
+    `session_album`), tests pass, and `databot.log` shows no new error after the last start.
     Send the orchestrator the new sessions' dates, gyms and exercise names in the ENDED message.
 
 - [x] **Task 10: Brian creates the Telegram bot and fills `.env`** (ticked 2026-11-13 by the orchestrator: Brian, "API keys added"; the orchestrator saw TELEGRAM_BOT_TOKEN and ANTHROPIC_API_KEY set without reading them; TELEGRAM_ALLOWED_USER_ID stays empty by decision, see Task 9a)
