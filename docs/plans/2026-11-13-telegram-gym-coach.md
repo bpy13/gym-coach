@@ -278,7 +278,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     another day from 17 to 22 Nov, every strength exercise has a picture (count them with
     `session_album`), tests pass, and `databot.log` shows no new error after the last start.
     Send the orchestrator the new sessions' dates, gyms and exercise names in the ENDED message.
-- [ ] **Task 9k: one Telegram message per exercise: machine photo, illustration and the task together** `[parallel-ok]` (slot 1 only) (beside earlier phases) (waiting: bot restart. Code, tests and the stored sessions 17-22 Nov are done 2026-11-16 (slot 1); the restart was refused by the auto-mode check, so the orchestrator restarts `gym-coach-bot` and checks bot.log, then ticks this)
+- [x] **Task 9k: one Telegram message per exercise: machine photo, illustration and the task together** `[parallel-ok]` (slot 1 only) (beside earlier phases) (done 2026-11-16: on Brian's "Yes, do both" the orchestrator restarted the bot at 16:55; bot.log shows a clean start, no new error)
   - Brian, 2026-11-16, on seeing a mock-up of the 18 Nov session (one text message, then one
     album of ten pictures): "(should be image + illustration + task) as one message. So if 5
     task on gym, like on Tuesday, 5 messages should be sent" (decisions.md).
@@ -309,7 +309,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     its sets, reps and weight; every exercise has at least one picture; tests cover the caption
     rule; and after the last start `data\bot.log` shows no new error. Do not send anything to
     Brian's chat as a test.
-- [ ] **Task 9l: a strength session shows one exercise at a time; the next comes when Brian reports** `[parallel-ok]` (slot 1 only) (beside earlier phases) (waiting: bot restart. Code, tests and the dry run of 17 Nov are done 2026-11-16 (slot 1); the restart was refused by the auto-mode check, so the orchestrator restarts `gym-coach-bot` and checks bot.log, then ticks this)
+- [x] **Task 9l: a strength session shows one exercise at a time; the next comes when Brian reports** `[parallel-ok]` (slot 1 only) (beside earlier phases) (done 2026-11-16: on Brian's "Yes, do both" the orchestrator restarted the bot at 16:55; bot.log shows a clean start, no new error)
   - Brian, 2026-11-16, on seeing the per-exercise messages of Task 9k all at once: "should show
     1 at a time, and as I report my progress and during resting, show next" (decisions.md).
   - Do: (1) At the session time the bot sends one text message: gym, date and the list of
@@ -340,7 +340,7 @@ The "Done when" lists in `docs/milestones.md`, milestones 1 to 3.
     the bot sends the list message (without the "Send start" line) and right after it the first
     exercise message. This replaces steps (1), (2) and the first call in (5) above, and the
     word start in the Done-when test.
-- [ ] **Task 9m: cardio days are Monday, Wednesday and Friday** `[parallel-ok]` (slot 1 only) (beside earlier phases) (waiting: Brian; code and test done 2026-11-16 (slot 1), 147 tests pass, ruff clean; the delete of the 21 Nov row in datagym.db was refused by the auto-mode check (backup datagym.db.bak-9m exists); Brian removes the 21 Nov cardio row and restarts the bot. Delete command, from the project folder: `conda run -n gym-coach python -c "import sqlite3; c=sqlite3.connect('data/gym.db'); c.execute(\"delete from plan_sessions where date='2026-11-21' and kind='cardio'\"); c.commit()"`; then restart `gym-coach-bot` and check bot.log, then tick this)
+- [x] **Task 9m: cardio days are Monday, Wednesday and Friday** `[parallel-ok]` (slot 1 only) (beside earlier phases) (done 2026-11-16: on Brian's "Yes, do both" the orchestrator removed the 21 Nov cardio row and restarted the bot at 16:55; bot.log shows a clean start, no new error)
   - Brian, 2026-11-16: "cardio should be Mon Wed Fri" (decisions.md). Strength stays Tuesday,
     Thursday (home) and Sunday (parents' gym) (Task 9j). Saturday has no session.
   - Do: (1) In the day rule and the plan prompt (`planner.py`, `prompts.py`): cardio on Monday,
