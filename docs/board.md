@@ -1,6 +1,7 @@
 # Board: gym-coach
 
 ## Workers
+- slot 1: Task 14g, building (since 2026-11-17 17:29)
 
 ## Ready to build
 
