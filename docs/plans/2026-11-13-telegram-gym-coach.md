@@ -475,6 +475,43 @@ still wait for Task 11.
     `sending pictures failed` without a later successful send, and the count of
     `ConnectError` lines per hour written beside today's (about 8 an hour).
 
+- [ ] **Task 14g: what the 17 Nov session shows beyond lost sends (bug, live)** (opus) needs: Task 14f
+  - Brian, 2026-11-17: "Can you see the conversation? If so you should be able to figure out
+    along with the gym app trace and log". The bot keeps no message text and the orchestrator
+    cannot read his Telegram, so the session was rebuilt from `data/gym.db` (read-only) and
+    `data/bot.log`. Facts (checked 17:25):
+    - Three replies were dropped in eight minutes (17:09:26, 17:15:21, 17:17:02) and one set
+      of pictures (17:10:57). Each dropped reply came after the work was done: a report is
+      saved, the reply saying so never arrives, so he cannot tell whether to send it again.
+    - `kv flow:2026-11-17` = 2 (Lat pulldown is "shown") yet two sets of Lying leg curl
+      (index 3) are logged and Lat pulldown has 2 of 3 sets; Machine shoulder press and Seated
+      cable row have none. The session row says `done` since the first set
+      (`reports.py` line 43), with 10 of 18 sets logged.
+    - 17:10:41 and 17:10:44: two Opus calls (14,555 and 16,292 input tokens) wrote a whole new
+      proposed week, 23 to 29 Nov, in the middle of the session: a message of his was read
+      as "change the plan". Most likely (inferred, not seen) he asked to change an exercise of
+      today's session.
+  - Files: `src/gym_coach/router.py`, `src/gym_coach/reports.py`, `src/gym_coach/store.py`,
+    `src/gym_coach/app.py`, `src/gym_coach/prompts.py`, their tests.
+  - Do: (1) keep the chat: one table in `data/gym.db` (git-ignored) with time, direction,
+    text, and whether the send reached Telegram; rows older than 30 days are removed
+    (orchestrator's call, 2026-11-17; Brian may change it). (2) A reply that could not be
+    delivered within Task 14f's tries is kept and sent first when the next send works,
+    marked "(late)". (3) While a session is on, a request to change an exercise changes
+    today's session only (swap or drop that exercise, keep the logged sets) and never writes
+    a new week; a new week is proposed only on `/propose`, or on a change request when a
+    proposed week is waiting. Before writing code, write the three to five message kinds he
+    could have sent at 17:09 to 17:10 and what each should do, in the plan line. (4) The
+    exercise "shown" follows what he reports: a set for a later exercise of today moves the
+    pointer there, and exercises with sets missing are listed at "Session done" instead of
+    being passed over in silence. (5) The day is marked `done` when the flow closes or at
+    the evening report, not at the first set. (6) The proposed week 23 to 29 Nov stays as it
+    is: only Brian approves or drops it.
+  - Done when: failing tests first for (2) to (5). Tests and lint pass. Restart the bot
+    through its scheduled task (if refused, ask the orchestrator), then in the next real
+    session read the chat table and `data/bot.log`: every message of his has a delivered
+    reply, the pointer matches the sets logged, and no new week appears unless he asked.
+
 - [ ] **Task 16: live check of meals** needs: Task 13, Task 14 (slot 1 only) (checkpoint) (waiting: inbox, 2026-11-16: bot restarted through the scheduled task at 15:31 on the Task 12-14 code, log clean; Brian sends one real meal photo at a real meal or session, question in docs/inbox.md. Slot 1 never committed this mark; the orchestrator restored it)
   - Done when: Brian sends one real meal photo and gets an estimate and a daily total; the
     month's cost in `/cost` rose by less than US$0.01 for that photo; the card asks Brian
