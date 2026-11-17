@@ -430,7 +430,7 @@ still wait for Task 11.
   - Notes: Brian, 2026-11-17: "gym: tip can be for later, drop it for now, and reconsider when I
     request".
 
-- [ ] **Task 14d: the form tip is back, as one short line** `[parallel-ok]` (taken: slot 1, 2026-11-17 13:40)
+- [ ] **Task 14d: the form tip is back, as one short line** `[parallel-ok]` (waiting: Brian's restart, 2026-11-17: code and tests done, 151 tests and ruff pass; restart through the scheduled task refused by the auto-mode check; orchestrator or Brian restarts `gym-coach-bot` and checks data/bot.log shows "bot started" after the commit)
   - Why: Brian, 2026-11-17: "gym tip: if it's just one line it's okay" (after seeing that the tip is one line of text under the exercise line).
   - Files: the caption builder (`src/gym_coach/albums.py`), the tip source (`src/gym_coach/illustrations.py`, `CUE_CHARS`), the setting from Task 14c, their tests.
   - Done when: tests pass: with the default settings an exercise caption is the task line plus one tip line; the tip is the first instruction sentence, cut at a word end to at most 60 characters with "..." when longer (60 is the orchestrator's call for one line on a phone; Brian may change it), and holds no line break; the Task 14c setting still turns the tip off. Then restart the bot through its scheduled task and check `data/bot.log` shows "bot started" after the commit and no error; if the restart is refused, mark the task waiting on Brian's restart.
