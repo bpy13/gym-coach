@@ -1,7 +1,6 @@
 # Board: gym-coach
 
 ## Workers
-- slot 1: Task 14e (bot hangs at start), building
 
 ## Ready to build
 
@@ -38,3 +37,4 @@
 - Task 14b, weekly check-in asks for weight only (`scheduler.py`, `router.py`, `tests/test_body.py`): code and tests done 2026-11-17 (slot 1); 148 tests pass, ruff clean. Waiting: bot restart refused by the auto-mode check; orchestrator or Brian restarts `gym-coach-bot` and checks bot.log.
 - Task 14c, exercise messages without the form tip (`albums.py`, `config.py SHOW_FORM_TIP`, `app.py`): code and tests done 2026-11-17 (slot 1); 150 tests pass, ruff clean. Tip back on with `SHOW_FORM_TIP=on` in `.env`. Waiting: bot restart refused by the auto-mode check; orchestrator or Brian restarts `gym-coach-bot` (with Task 14b) and checks bot.log.
 - Task 14d, one-line form tip back on by default (`illustrations.py CUE_CHARS=60`, `albums.py`, `config.py SHOW_FORM_TIP`): code and tests done 2026-11-17 (slot 1); 151 tests pass, ruff clean. Turn off with `SHOW_FORM_TIP=off` in `.env`. Waiting: bot restart refused by the auto-mode check; orchestrator or Brian restarts `gym-coach-bot` and checks bot.log.
+- Task 14e, bot hangs at start (`boot.py`, `app.py`, `llm.py LazyAnthropic`, `scripts\install-logon-task.ps1 -Priority 4`): code and tests done 2026-11-17 (slot 1); 157 tests pass, ruff clean. Cause: the logon task's below-normal priority (7) starved the anthropic import (2,824 modules) that ran before "bot started"; pid 28844 still stuck after 48 min. A normal-priority start on a copy of the data: "starting" +0.2 s, "bot started" +0.7 s. Waiting: the restart was refused by the auto-mode check; Brian runs `Stop-ScheduledTask gym-coach-bot`, `scripts\install-logon-task.ps1`, `Start-ScheduledTask gym-coach-bot` before 07:00 on 18 Nov; orchestrator checks bot.log.
