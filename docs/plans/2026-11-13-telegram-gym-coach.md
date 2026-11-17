@@ -507,9 +507,23 @@ still wait for Task 11.
     being passed over in silence. (5) The day is marked `done` when the flow closes or at
     the evening report, not at the first set. (6) The proposed week 23 to 29 Nov stays as it
     is: only Brian approves or drops it.
+    (7) The bot reads each message with the session in view (Brian, 2026-11-17: "It seems
+    to me the Telegram bot has no context and cannot read previous messages, please fix that
+    because if missed message it messes everything without the capability to handle session
+    messages"). Checked: `router._handle` gives the model the one message alone, and
+    `_answer` adds only the profile and today's plan. From now on every model call that
+    reads a message (the sorting call and the answer) also gets: the last 12 chat lines of
+    today from the chat table of (1), each bot line marked delivered or not delivered;
+    today's session with the sets logged per exercise and the exercise now shown. The
+    sorting prompt says so: a short message ("same again", "35 12", "the other one", "I
+    already told you") is read against those lines; a report that repeats one whose reply
+    was not delivered is not logged twice (the bot answers with the state instead); when
+    the message cannot be placed, the bot asks one short question and changes nothing.
+    Keep the fast model for sorting; write the added tokens per message on the board.
   - Done when: failing tests first for (2) to (5). Tests and lint pass. Restart the bot
     through its scheduled task (if refused, ask the orchestrator), then in the next real
-    session read the chat table and `data/bot.log`: every message of his has a delivered
+    session read the chat table and `data/bot.log` (tests for (7): a repeated report after
+    an undelivered reply logs once; "same again" logs the last set again): every message of his has a delivered
     reply, the pointer matches the sets logged, and no new week appears unless he asked.
 
 - [ ] **Task 16: live check of meals** needs: Task 13, Task 14 (slot 1 only) (checkpoint) (waiting: inbox, 2026-11-16: bot restarted through the scheduled task at 15:31 on the Task 12-14 code, log clean; Brian sends one real meal photo at a real meal or session, question in docs/inbox.md. Slot 1 never committed this mark; the orchestrator restored it)
