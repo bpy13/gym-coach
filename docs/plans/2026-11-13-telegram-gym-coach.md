@@ -440,6 +440,41 @@ still wait for Task 11.
   - What: find where it hangs (for example `py-spy dump` on the live pid, or `python -X importtime -v -m gym_coach` with a separate data folder and a fake token so the real lock, database and chat are not touched), fix the cause, and make the start log its first line before anything that can block ("starting", then "bot started"), with a timeout on every network call made during start. A failing test first where the cause can be tested.
   - Done when: after a restart of the scheduled task, `data/bot.log` shows "bot started" within 2 minutes of the process start, twice in a row, and no error after; tests and ruff pass. If the worker's restart is refused, mark the task waiting on Brian's stop and start (`Stop-ScheduledTask gym-coach-bot`, then `Start-ScheduledTask gym-coach-bot`), and say so in the ENDED message. It must be up before 07:00 on 18 Nov (next session message).
 
+- [ ] **Task 14f: replies and pictures get lost when a Telegram call fails (bug, live)** (opus) `[parallel-ok]`
+  - Brian, 2026-11-17 17:10: "Please check gym project, app not behaving nirmally". Facts from
+    `data/bot.log` (orchestrator, 17:12): the bot runs (started 15:21:48) and its Claude calls
+    answer 200, but calls to Telegram fail now and then with `ConnectError`: 221 such lines in
+    the log, 33 since 15:00 today. A failed poll is tried again, a failed send is not:
+    17:09:26 `handling a message failed ... sendMessage failed: ConnectError` (`app.py` line 58:
+    the reply was built and then dropped, he got nothing); 17:10:57 `sending pictures failed;
+    sending the text ... send album failed: ConnectError` (pictures dropped). From the same PC,
+    six plain `curl https://api.telegram.org/` calls at 17:14 all connected in under 0.05 s, so
+    the line is not down; the failures are short and come and go. The log holds no line for a
+    message received or sent, so nobody can tell from it what he asked and what he got.
+    Replies are also slow: one message makes two to five Claude calls, up to 37 s apart.
+  - Files: `src/gym_coach/telegram.py`, `src/gym_coach/app.py`, their tests, the planner where
+    it logs `has no illustration`.
+  - Do: (1) every send (`sendMessage`, album, single picture, file download) tries again on a
+    connection error: 4 tries, pauses 1, 3, 8 s, then raises; a send is never repeated once
+    Telegram answered. (2) In `handle`, a failure of one part (pictures, the exercise message)
+    never stops the text reply from going out. (3) Find why connecting fails so often and say
+    it in the plan line with the evidence: log the cause text of the error (never the URL, it
+    holds the token); test IPv4 against IPv6 for api.telegram.org (a transport bound to
+    `0.0.0.0` forces IPv4) and one new connection per call against a kept one; keep what
+    measures better over 200 calls to `getMe`. (4) Log one line per message received (kind and
+    length only, no text) and per reply sent (parts, pictures, seconds from receipt to last
+    send). (5) 'Lat pulldown' and 'Seated low row' have no picture: give them one from the
+    stored set or say in the plan line why none fits. (6) Report where the seconds of a slow
+    reply go (count and time of the Claude calls for one "next" during a session); change
+    nothing there, write it on the board for Brian.
+  - Done when: failing tests first: a send that fails twice and then works delivers once; a
+    failing album still sends the text; a failing exercise message still sends the reply.
+    Tests and lint pass. Then restart the bot through its scheduled task `gym-coach-bot` (if
+    the restart is refused, ask the orchestrator: Brian runs it) and read `data/bot.log`: over
+    the next 2 hours with at least one exchange, no `handling a message failed` and no
+    `sending pictures failed` without a later successful send, and the count of
+    `ConnectError` lines per hour written beside today's (about 8 an hour).
+
 - [ ] **Task 16: live check of meals** needs: Task 13, Task 14 (slot 1 only) (checkpoint) (waiting: inbox, 2026-11-16: bot restarted through the scheduled task at 15:31 on the Task 12-14 code, log clean; Brian sends one real meal photo at a real meal or session, question in docs/inbox.md. Slot 1 never committed this mark; the orchestrator restored it)
   - Done when: Brian sends one real meal photo and gets an estimate and a daily total; the
     month's cost in `/cost` rose by less than US$0.01 for that photo; the card asks Brian
