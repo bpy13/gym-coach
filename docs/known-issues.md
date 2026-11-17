@@ -29,3 +29,11 @@
   connection (30 s idle expiry); every send tries 4 times (pauses 1, 3, 8 s) on a connect
   error only, never once Telegram may have the request. The Task 9b "no keep-alive" choice was
   a guess (the real 9b cause was the task's low priority, Task 14e) and is undone.
+- Task 14g (2026-11-17): the bot keeps the chat (both directions, text, delivered or not) in
+  the `chat` table of `data/gym.db` for 30 days, so each model call that reads a message sees
+  today's last 12 lines and today's session. Limits: a reply that never reached Telegram goes
+  out "(late)" only with the next send of the same day; a report sent again with the same text
+  after an undelivered reply is not logged twice, so two identical real sets in a row while
+  Telegram is down need the second one sent again after the "Already logged" reply. A swap
+  needs equipment exactly on that day's gym list; the new exercise has no picture until a
+  proposal gives it one.

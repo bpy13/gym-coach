@@ -520,6 +520,21 @@ still wait for Task 11.
     was not delivered is not logged twice (the bot answers with the state instead); when
     the message cannot be placed, the bot asks one short question and changes nothing.
     Keep the fast model for sorting; write the added tokens per message on the board.
+  - Message kinds at 17:09 to 17:10 and what each does (slot 1, 2026-11-17, before code):
+    - "can I do seated row instead of lat pulldown, it's taken": swap that exercise in today's
+      session (equipment must be on today's gym list, else one short question); its logged
+      sets stay; the new exercise gets the sets still to do and the same rep range; if it was
+      the exercise shown, the new one's message goes out.
+    - "drop the shoulder press, my shoulder hurts": drop it from today's session (kept with
+      the sets already logged, if any); the next exercise is shown if it was the one shown.
+    - "35 is too heavy for leg curl, make it 30": today's weight for that exercise changes.
+    - "less leg work next week" (a change to a future week): with a proposed week waiting it
+      revises that week; without one it is kept as a note, the reply says so, and the next
+      `/propose` uses it. No new week is written.
+    - "what can I do instead of lat pulldown?" (a question): answered, nothing changes.
+  - Orchestrator, 2026-11-17: (5) the day is `done` when the flow closes, or by a silent
+    21:00 job for an approved strength day with sets logged. The task ends waiting on the
+    next real session (orchestrator reads the chat table and bot.log).
   - Done when: failing tests first for (2) to (5). Tests and lint pass. Restart the bot
     through its scheduled task (if refused, ask the orchestrator), then in the next real
     session read the chat table and `data/bot.log` (tests for (7): a repeated report after

@@ -25,6 +25,11 @@ CREATE TABLE IF NOT EXISTS api_calls (
     id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, model TEXT NOT NULL,
     input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL, cost_usd REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS chat (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL,
+    direction TEXT NOT NULL CHECK (direction IN ('in','out')),
+    kind TEXT NOT NULL DEFAULT 'text', text TEXT NOT NULL,
+    delivered INTEGER NOT NULL DEFAULT 1, late INTEGER NOT NULL DEFAULT 0);
 """
 
 
@@ -142,6 +147,34 @@ class Store:
                 (start, end),
             ).fetchone()
         return float(row[0])
+
+    # chat: what was said both ways (text kept 30 days); `delivered` = reached Telegram
+    def add_chat(self, timestamp, direction, text, delivered=True, kind="text") -> int:
+        with self._lock, self._db:
+            cur = self._db.execute(
+                "INSERT INTO chat (timestamp, direction, kind, text, delivered)"
+                " VALUES (?,?,?,?,?)",
+                (timestamp, direction, kind, text, int(bool(delivered))))
+            return int(cur.lastrowid)
+
+    def set_chat_delivered(self, chat_id, delivered=True, late=False) -> None:
+        self._run("UPDATE chat SET delivered=?, late=? WHERE id=?",
+                  (int(bool(delivered)), int(bool(late)), chat_id))
+
+    def chat_lines(self, day, limit=12) -> list[dict]:
+        """The last `limit` chat rows of `day` (YYYY-MM-DD), oldest first."""
+        rows = self._rows("SELECT * FROM chat WHERE substr(timestamp,1,10)=?"
+                          " ORDER BY id DESC LIMIT ?", (day, limit))
+        return rows[::-1]
+
+    def undelivered_texts(self, since) -> list[dict]:
+        """Outgoing text messages from `since` (ISO) on that never reached Telegram."""
+        return self._rows("SELECT * FROM chat WHERE direction='out' AND kind='text'"
+                          " AND delivered=0 AND timestamp>=? ORDER BY id", (since,))
+
+    def prune_chat(self, before) -> None:
+        """Remove chat rows older than `before` (ISO)."""
+        self._run("DELETE FROM chat WHERE timestamp<?", (before,))
 
     # kv
     def get(self, key, default=None):

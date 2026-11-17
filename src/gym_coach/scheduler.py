@@ -7,9 +7,11 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from gym_coach import reports
 from gym_coach.messages import list_message
 
 log = logging.getLogger(__name__)
+CLOSE_DAY_TIME = "21:00"  # a day with sets logged is marked done (orchestrator, 2026-11-17)
 
 
 class Scheduler:
@@ -32,6 +34,13 @@ class Scheduler:
             self._send_session(now.date().isoformat())
             if now.weekday() == 0:  # Monday
                 self._send_body_prompt(now.date().isoformat())
+        if now.strftime("%H:%M") >= CLOSE_DAY_TIME:
+            self._close_day(now.date().isoformat())
+
+    def _close_day(self, day: str) -> None:
+        """Silently mark the day done when sets were logged but the flow never closed."""
+        if reports.mark_done(self.store, day):
+            log.info("day closed at the evening check")
 
     def _send_body_prompt(self, day: str) -> None:
         marker = f"sent:body:{day}"

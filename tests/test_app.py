@@ -205,7 +205,8 @@ def test_failing_photo_download_still_answers(store):
 def test_failing_part_does_not_stop_later_parts(store):
     tg = FailingTelegram(fail_pictures=True, fail_texts={"one"})
     App(tg, StubRouter(), store).send_parts(5, [("one", [b"x"]), ("two", [b"y"]), ("three", [])])
-    assert tg.sent == [(5, "two"), (5, "three")]
+    # "one" failed; it goes out first, marked late, with the next send that works (Task 14g)
+    assert tg.sent == [(5, "(late) one"), (5, "two"), (5, "three")]
 
 
 def test_one_log_line_per_message_and_per_reply(store, caplog):

@@ -17,11 +17,12 @@ def s(name, w, reps):
     return {"exercise": name, "weight_kg": w, "reps": reps}
 
 
-def test_log_numbers_sets_and_marks_session_done(store):
+def test_log_numbers_sets_and_leaves_the_day_open(store):
     store.add_plan_session(DAY, "home", "strength", "approved", [])
     reports.log_report(store, DAY, [s("Chest press", 35, 10), s("Chest press", 35, 8)])
     assert [r["set_no"] for r in store.logged_sets(DAY)] == [1, 2]
-    assert store.plan_session(DAY)["status"] == "done"
+    assert store.plan_session(DAY)["status"] == "approved"  # done at the end (Task 14g)
+    assert reports.mark_done(store, DAY) and store.plan_session(DAY)["status"] == "done"
     assert reports.format_log(store, DAY) == "Logged:\nChest press: 35 kg x 10, 8"
 
 

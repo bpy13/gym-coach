@@ -34,14 +34,31 @@ def _rewrite(store, day: str, sets: list[dict]) -> None:
 
 
 def log_report(store, day: str, raw_sets) -> list[dict]:
-    """Add the reported sets to `day` (set numbers continue after any already logged)."""
+    """Add the reported sets to `day` (set numbers continue after any already logged).
+    The day stays as it is: `mark_done` closes it at the end of the session."""
     sets = _clean(raw_sets)
     if sets:
         _rewrite(store, day, store.logged_sets(day) + sets)
-        session = store.plan_session(day)
-        if session and session["status"] in ("proposed", "approved"):
-            store.set_plan_status(day, "done")
     return sets
+
+
+def mark_done(store, day: str) -> bool:
+    """Mark a proposed or approved day `done` if any set is logged on it."""
+    session = store.plan_session(day)
+    if session and session["status"] in ("proposed", "approved") and store.logged_sets(day):
+        store.set_plan_status(day, "done")
+        return True
+    return False
+
+
+def missing(store, day: str, session: dict) -> list[str]:
+    """'Name (done of planned)' for each exercise of the session with sets still to do."""
+    out = []
+    for ex in session["exercises"]:
+        done = sets_done(store, day, ex["name"])
+        if done < int(ex["sets"]):
+            out.append(f"{ex['name']} ({done} of {ex['sets']})")
+    return out
 
 
 def correct(store, day: str, raw_sets) -> list[dict]:

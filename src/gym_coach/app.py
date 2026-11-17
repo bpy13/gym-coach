@@ -5,28 +5,30 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from gym_coach.albums import exercise_parts, session_parts
 from gym_coach.boot import AlreadyRunning, InstanceLock, setup_logging, start  # noqa: F401
 from gym_coach.config import Config
 from gym_coach.illustrations import Illustrations
-from gym_coach.llm import Claude, LazyAnthropic
+from gym_coach.llm import HK, Claude, LazyAnthropic
 from gym_coach.messages import exercise_line
 from gym_coach.router import Router
 from gym_coach.scheduler import Scheduler
 from gym_coach.store import Store
-from gym_coach.telegram import TelegramClient
+from gym_coach.telegram import TelegramClient, TelegramError
 
 log = logging.getLogger(__name__)
 RESTART_PAUSE_S = 30.0
+CHAT_DAYS = 30  # chat text kept this long (orchestrator, 2026-11-17)
+LATE = "(late) "
 PHOTO_FAILED = "I could not fetch that photo from Telegram. Please send it again."
 
 
 class App:
     def __init__(self, telegram, router: Router, store: Store, chat_id: int | None = None,
-                 parts_for=None, exercise_for=None):
+                 parts_for=None, exercise_for=None, now=None):
         self.parts_for = parts_for  # session -> [(text, [jpeg bytes])], one per message
         self.exercise_for = exercise_for  # (session, index) -> (caption, [jpeg bytes])
         self.telegram = telegram
@@ -34,6 +36,11 @@ class App:
         self.store = store
         self.chat_id = chat_id
         self._count = [0, 0]  # messages and pictures sent since the last reset
+        self._now = now or getattr(router, "_now", None) or (lambda: datetime.now(HK))
+        self._send_lock = threading.RLock()  # the poll loop and the scheduler both send
+
+    def _stamp(self) -> str:
+        return self._now().astimezone(HK).isoformat(timespec="seconds")
 
     def handle(self, incoming) -> None:
         """Reply to one incoming message: a meal photo (kept in memory only) or text.
@@ -45,37 +52,81 @@ class App:
         else:
             log.info("received text (%d chars)", len((incoming.text or "").strip()))
         try:
+            self.store.prune_chat(
+                (self._now().astimezone(HK) - timedelta(days=CHAT_DAYS)).isoformat())
             self._handle(incoming)
         finally:
             log.info("replied: %d messages, %d pictures, %.1f s after receipt",
                      self._count[0], self._count[1], time.monotonic() - started)
 
-    def _text(self, chat_id: int, text: str) -> None:
-        self.telegram.send_message(chat_id, text)
-        self._count[0] += 1
+    def _text(self, chat_id: int, text: str, kind: str = "text") -> None:
+        """Send and record a text. A text that fails (after the client's own tries) stays
+        recorded as not delivered; kind "text" is then sent first, marked (late), by the next
+        send that works today. Raises when the send fails."""
+        with self._send_lock:
+            self._send_late(chat_id)
+            row = self.store.add_chat(self._stamp(), "out", text, delivered=False, kind=kind)
+            self.telegram.send_message(chat_id, text)
+            self.store.set_chat_delivered(row)
+            self._count[0] += 1
 
     def _pictures(self, chat_id: int, images: list, caption: str) -> None:
-        self.telegram.send_pictures(chat_id, images, caption)
-        self._count[0] += 1
-        self._count[1] += len(images)
+        with self._send_lock:
+            self._send_late(chat_id)
+            row = self.store.add_chat(self._stamp(), "out", caption, delivered=False,
+                                      kind="pictures")
+            self.telegram.send_pictures(chat_id, images, caption)
+            self.store.set_chat_delivered(row)
+            self._count[0] += 1
+            self._count[1] += len(images)
+
+    def _send_late(self, chat_id: int) -> None:
+        """Today's texts that never reached Telegram, oldest first, each marked (late).
+        Stops at the first failure; the rest wait for the next send."""
+        today = self._now().astimezone(HK).date().isoformat()
+        for row in self.store.undelivered_texts(today):
+            try:
+                self.telegram.send_message(chat_id, LATE + row["text"])
+            except TelegramError:
+                log.warning("late reply still not sent; kept for the next send")
+                return
+            self.store.set_chat_delivered(row["id"], late=True)
+            self._count[0] += 1
+            log.info("sent a late reply")
+
+    def _record_in(self, received: str, text: str) -> None:
+        try:
+            self.store.add_chat(received, "in", text)
+        except Exception:
+            log.exception("recording the message failed")
 
     def _handle(self, incoming) -> None:
         self.store.set("chat_id", str(incoming.chat_id))
         self.chat_id = incoming.chat_id
+        received = self._stamp()
         if incoming.photo_file_id:
             try:
                 jpeg = self.telegram.download_file(incoming.photo_file_id)
             except Exception:
                 log.exception("downloading the photo failed")
+                self._record_in(received, "[photo, not fetched]")
                 self._text(incoming.chat_id, PHOTO_FAILED)
                 return
-            self._text(incoming.chat_id, self.router.handle_photo(jpeg, incoming.caption))
+            try:
+                reply = self.router.handle_photo(jpeg, incoming.caption)
+            finally:
+                self._record_in(received, ("[photo] " + (incoming.caption or "")).strip())
+            self._text(incoming.chat_id, reply)
             return
         text = (incoming.text or "").strip()
         if not text:
+            self._record_in(received, "[not text]")
             self._text(incoming.chat_id, "I can only read text for now.")
             return
-        reply = self.router.handle(text)
+        try:  # recorded after the router read it, so its chat lines end before this one
+            reply = self.router.handle(text)
+        finally:
+            self._record_in(received, text)
         if text.split()[0].lower() == "/start" and not self._has_upcoming_plan():
             reply += "\n\n" + self.router.handle("/propose")
         session = self.router.pop_album_session()
@@ -144,8 +195,8 @@ class App:
 
     def send_to_owner(self, text: str) -> None:
         chat = self.chat_id or int(self.store.get("chat_id") or 0)
-        if chat:
-            self.telegram.send_message(chat, text)
+        if chat:  # the scheduler retries a failed one itself, so it is not sent late
+            self._text(chat, text, kind="scheduled")
         else:
             log.warning("no chat known yet; message not sent")
 
