@@ -20,3 +20,12 @@
   powershell between. The task now starts `pythonw.exe -m gym_coach` directly, so Task Scheduler
   stops the process it started. A bot started by the old task has to be stopped by hand once,
   and `scripts\install-logon-task.ps1` re-run.
+- Task 14f (2026-11-17): Telegram calls failed about 8 times an hour with `ConnectError`. Cause,
+  measured from this PC over 200 `getMe` calls per variant: a new connection per call failed
+  26-28 times in the TLS handshake (`SSL: UNEXPECTED_EOF_WHILE_READING`), median 0.85 s; a
+  kept connection failed 0 times, median 0.28 s. IPv4 and the default route measure the same
+  (this PC has no IPv6 route to api.telegram.org). The DNS server is a VPN's, so the
+  handshake cut is likely on the VPN path (inferred, not checked). The client now keeps its
+  connection (30 s idle expiry); every send tries 4 times (pauses 1, 3, 8 s) on a connect
+  error only, never once Telegram may have the request. The Task 9b "no keep-alive" choice was
+  a guess (the real 9b cause was the task's low priority, Task 14e) and is undone.
