@@ -86,17 +86,32 @@ def format_log(store, day: str, header: str = "Logged:") -> str:
         groups.setdefault(r["exercise"], []).append(r)
     if not groups:
         return "Nothing logged yet today."
-    lines = [header]
-    for name, rows in groups.items():
-        parts, i = [], 0
-        while i < len(rows):  # group consecutive sets with the same weight
-            w, reps = rows[i]["weight_kg"], []
-            while i < len(rows) and rows[i]["weight_kg"] == w:
-                reps.append(str(rows[i]["reps"]))
-                i += 1
-            parts.append((f"{w:g} kg x " if w is not None else "x ") + ", ".join(reps))
-        lines.append(f"{name}: " + "; ".join(parts))
-    return "\n".join(lines)
+    return "\n".join([header] + [f"{name}: {sets_text(rows)}" for name, rows in groups.items()])
+
+
+def sets_text(rows: list[dict]) -> str:
+    """Sets of one exercise, e.g. '35 kg x 10, 10; 30 kg x 8'."""
+    parts, i = [], 0
+    while i < len(rows):  # group consecutive sets with the same weight
+        w, reps = rows[i]["weight_kg"], []
+        while i < len(rows) and rows[i]["weight_kg"] == w:
+            reps.append(str(rows[i]["reps"]))
+            i += 1
+        parts.append((f"{w:g} kg x " if w is not None else "x ") + ", ".join(reps))
+    return "; ".join(parts)
+
+
+# A workout (Task 14i): kv "workout:<day>" is "open|<last chat row before it>|<open time>",
+# then "closed|..." once it closes (no exercise left, "end", or the 21:00 close).
+WORKOUT_KEY = "workout:"
+
+
+def close_workout(store, day: str) -> bool:
+    value = store.get(WORKOUT_KEY + day) or ""
+    if value.startswith("open|"):
+        store.set(WORKOUT_KEY + day, "closed|" + value[5:])
+        return True
+    return False
 
 
 def sets_done(store, day: str, exercise: str) -> int:

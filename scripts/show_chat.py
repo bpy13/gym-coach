@@ -33,6 +33,8 @@ def _trace_lines(t: dict) -> list[str]:
         lines.append(f"{PAD}reply after {t['seconds']} s")
     if t["error"]:
         lines.append(f"{PAD}ERROR {t['error']}")
+    if t.get("exercise"):  # Task 14i: the exercise shown after the message
+        lines.append(f"{PAD}now shown: {t['exercise']}")
     return lines
 
 

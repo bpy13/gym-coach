@@ -42,10 +42,19 @@ It answers only the one Telegram account you allow.
 
 - Photos you send: with a caption, the caption is read like a text (a meal caption gets a meal
   estimate, a question about the machine gets an answer). Without a caption the bot estimates
-  a meal, or asks what it is when it shows no food.
+  a meal, or asks what it is when it shows no food. During a workout a photo is never a meal:
+  it is answered as a question about the workout.
+
+- Workouts: send "start" when you begin (the first set or a question about today's exercises
+  also starts it) and "end" when you stop; it also ends when every exercise is done or at
+  21:00. While it runs, the bot reads each message with the whole workout's chat in view. If
+  you say sets are missing ("leg curl and row now missing"), the bot checks the chat: it saves
+  or fixes the sets you reported and says what it changed, or shows the log and asks whether
+  you misread. A change to next week is kept until this week's last session is done; then the
+  bot asks. `/propose` works any time.
 
 - See a day's chat: `conda run -n gym-coach python scripts\show_chat.py --day 2026-11-17`
-  prints the chat with what the bot understood, its model calls and seconds, and each logged
-  set's save time (read-only on `data\gym.db`).
+  prints the chat with what the bot understood, its model calls and seconds, the exercise
+  shown after each message, and each logged set's save time (read-only on `data\gym.db`).
 
 See `docs/plans/` for the plan.

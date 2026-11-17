@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS chat (
     delivered INTEGER NOT NULL DEFAULT 1, late INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS trace (
     id INTEGER PRIMARY KEY AUTOINCREMENT, chat_row INTEGER, timestamp TEXT NOT NULL,
-    understood TEXT, calls TEXT NOT NULL DEFAULT '[]', seconds REAL, error TEXT);
+    understood TEXT, calls TEXT NOT NULL DEFAULT '[]', seconds REAL, error TEXT,
+    exercise TEXT);
 """
 
 
@@ -50,6 +51,10 @@ class Store:
         columns = {r[1] for r in self._db.execute("PRAGMA table_info(logged_sets)")}
         if "saved_at" not in columns:
             self._db.execute("ALTER TABLE logged_sets ADD COLUMN saved_at TEXT")
+        # Task 14i: the exercise shown after each message ("1: Lat pulldown"); same migration
+        columns = {r[1] for r in self._db.execute("PRAGMA table_info(trace)")}
+        if "exercise" not in columns:
+            self._db.execute("ALTER TABLE trace ADD COLUMN exercise TEXT")
         self._db.commit()
 
     def close(self) -> None:
@@ -104,6 +109,10 @@ class Store:
 
     def logged_sets(self, date) -> list[dict]:
         return self._rows("SELECT * FROM logged_sets WHERE date=? ORDER BY id", (date,))
+
+    def update_logged_set(self, row_id, weight_kg, reps) -> None:
+        self._run("UPDATE logged_sets SET weight_kg=?, reps=? WHERE id=?",
+                  (weight_kg, reps, row_id))
 
     def clear_logged_sets(self, date) -> None:
         self._run("DELETE FROM logged_sets WHERE date=?", (date,))
@@ -178,18 +187,28 @@ class Store:
                           " ORDER BY id DESC LIMIT ?", (day, limit))
         return rows[::-1]
 
+    def chat_after(self, row_id) -> list[dict]:
+        """Every chat row after row `row_id`, oldest first (a workout's chat, Task 14i)."""
+        return self._rows("SELECT * FROM chat WHERE id>? ORDER BY id", (row_id,))
+
+    def last_chat_id(self) -> int:
+        with self._lock:
+            return int(self._db.execute("SELECT COALESCE(MAX(id),0) FROM chat").fetchone()[0])
+
     def undelivered_texts(self, since) -> list[dict]:
         """Outgoing text messages from `since` (ISO) on that never reached Telegram."""
         return self._rows("SELECT * FROM chat WHERE direction='out' AND kind='text'"
                           " AND delivered=0 AND timestamp>=? ORDER BY id", (since,))
 
     # trace: per incoming message, what the bot understood and how long it took
-    def add_trace(self, chat_row, timestamp, understood, calls, seconds, error) -> None:
-        """`calls` is a list of dicts (one per model call); stored as JSON."""
-        self._run("INSERT INTO trace (chat_row, timestamp, understood, calls, seconds, error)"
-                  " VALUES (?,?,?,?,?,?)",
+    def add_trace(self, chat_row, timestamp, understood, calls, seconds, error,
+                  exercise=None) -> None:
+        """`calls` is a list of dicts (one per model call); stored as JSON. `exercise`: the
+        exercise shown after the message, e.g. "1: Lat pulldown"."""
+        self._run("INSERT INTO trace (chat_row, timestamp, understood, calls, seconds, error,"
+                  " exercise) VALUES (?,?,?,?,?,?,?)",
                   (chat_row, timestamp, understood, json.dumps(calls, ensure_ascii=False),
-                   seconds, error))
+                   seconds, error, exercise))
 
     # kv
     def get(self, key, default=None):

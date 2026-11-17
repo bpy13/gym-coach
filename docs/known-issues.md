@@ -47,3 +47,15 @@
   stores nothing and the bot asks what it is; the image is not kept, so he sends it again with
   a caption. A future-week change asks "Revise the proposed week ...? Reply yes." only when no
   strength session is open today; any reply other than yes drops the question.
+- Task 14i (2026-11-17): a workout opens on "start", or by itself on a set report, a
+  correction, a missing-sets message, a change to today's session, "next/done/skip", or a
+  question the sorting call marks as about today's workout. It closes when no exercise has
+  sets left, on "end", or at 21:00; once closed it reopens only on "start". While it is open,
+  model calls see every chat line since it opened (outside a workout, today's last 12), and a
+  photo is never stored as a meal. Each trace row names the exercise shown after the message.
+  A week change waits until this week's last planned session is done, skipped or past; the
+  kept note is asked about when that session closes. `/propose` works any time. A
+  missing-sets message makes one more Haiku call that compares his claim with the chat: it
+  adds or fixes sets (never deletes) and says what changed, or asks whether he misread. Limits:
+  added sets are checked only by exercise name (a name not in today's session or log is
+  skipped); a very long workout grows each call (about 1,900 tokens at message 40).

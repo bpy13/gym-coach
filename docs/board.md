@@ -7,6 +7,17 @@
 ## Waiting on Brian
 
 ## Done and carried over
+- Task 14i, the whole workout in view (`router.py`, `app.py`, `store.py`, `reports.py`,
+  `scheduler.py`, `scripts/show_chat.py`): code on main 2026-11-17, not ticked; waits on a bot
+  restart and the next real workout checked in the `chat` and `trace` tables. 250 tests pass
+  (223 before; 27 new in `tests/test_14i.py`; the 14h missing-sets test now expects the
+  check call), ruff clean. Added cost, on fakes (a made-up 40-message workout: 24 set reports
+  and 16 questions, 56 model calls; tokens estimated as characters / 4): the workout view adds
+  about 20,600 input tokens over the 12-line view (48,300 to 68,800); the largest call grows
+  from about 1,000 to 1,900 tokens; about US$0.002 added per workout at Haiku's price. A
+  missing-sets message costs one more Haiku call. Shorter sorting JSON: the one real sorting
+  reply in the `trace` table used 178 output tokens (299 characters); a trimmed set report
+  is about 40 (inferred, not measured on the real model). Paid calls: none.
 - Task 14h, Brian's 17 Nov list (traces, photo kinds, own exercises, no surprise weeks,
   faster replies): code on main 2026-11-17, not ticked; waits on a bot restart and one real
   message checked in the `chat` and `trace` tables. 227 tests pass (197 before; 33 new in

@@ -22,7 +22,8 @@ from gym_coach.telegram import TelegramClient, TelegramError
 log = logging.getLogger(__name__)
 RESTART_PAUSE_S = 30.0
 LATE = "(late) "
-PHOTO_FAILED = "I could not fetch that photo from Telegram. Please send it again."
+TYPING_EVERY_S = 4.0  # "typing" is sent again this often until the reply (Task 14i)
+PHOTO_FAILED ="I could not fetch that photo from Telegram. Please send it again."
 
 
 class App:
@@ -37,6 +38,7 @@ class App:
         self._count = [0, 0]  # messages and pictures sent since the last reset
         self._now = now or getattr(router, "_now", None) or (lambda: datetime.now(HK))
         self._send_lock = threading.RLock()  # the poll loop and the scheduler both send
+        self._replied = threading.Event()  # set when the reply to his message is sent
 
     def _stamp(self) -> str:
         return self._now().astimezone(HK).isoformat(timespec="seconds")
@@ -51,10 +53,13 @@ class App:
             log.info("received photo (caption %d chars)", len(incoming.caption or ""))
         else:
             log.info("received text (%d chars)", len((incoming.text or "").strip()))
-        try:  # "typing..." while the model reads it; a failure here changes nothing
-            self.telegram.send_chat_action(incoming.chat_id, "typing")
-        except TelegramError as exc:
-            log.info("typing action not sent: %s", exc)
+        # "typing..." while the model reads it, repeated until the reply is sent (Telegram
+        # shows it for about 5 s only)
+        self._replied = threading.Event()
+        self._typing(incoming.chat_id)
+        typing = threading.Thread(target=self._keep_typing, name="typing", daemon=True,
+                                  args=(incoming.chat_id, self._replied))
+        typing.start()
         claude = getattr(self.router, "claude", None)
         self.router.understood = self.router.error = None  # nothing stale from the last one
         self._trace = {"chat_row": None, "reply_s": None, "error": None,
@@ -67,20 +72,35 @@ class App:
             self._trace["error"] = f"{type(exc).__name__}: {exc}"[:300]
             raise
         finally:
+            self._replied.set()
+            typing.join(timeout=5)
             if claude is not None:
                 claude.trace = None
             log.info("replied: %d messages, %d pictures, %.1f s after receipt",
                      self._count[0], self._count[1], time.monotonic() - self._started)
             self._write_trace()
 
+    def _typing(self, chat_id: int) -> None:
+        try:  # a failure here changes nothing
+            self.telegram.send_chat_action(chat_id, "typing")
+        except TelegramError as exc:
+            log.info("typing action not sent: %s", exc)
+
+    def _keep_typing(self, chat_id: int, replied: threading.Event) -> None:
+        while not replied.wait(TYPING_EVERY_S):
+            self._typing(chat_id)
+
     def _write_trace(self) -> None:
         """One trace row: the chat row answered, what was understood, the model calls, the
-        seconds to the reply and any error. Never raises: a trace never stops a reply."""
+        seconds to the reply, any error and the exercise shown after it. Never raises: a
+        trace never stops a reply."""
         t = self._trace
         error = "; ".join(e for e in (self.router.error, t["error"]) if e)
         try:
+            current = getattr(self.router, "current_exercise", None)
             self.store.add_trace(t["chat_row"], t["received"], self.router.understood,
-                                 t["calls"], t["reply_s"], error or None)
+                                 t["calls"], t["reply_s"], error or None,
+                                 current() if current else None)
         except Exception:
             log.exception("writing the trace failed")
 
@@ -92,6 +112,7 @@ class App:
             self._trace["error"] = f"reply not delivered: {exc}"[:300]
             raise
         finally:
+            self._replied.set()  # stops "typing"
             if self._trace["reply_s"] is None:
                 self._trace["reply_s"] = round(time.monotonic() - self._started, 2)
 

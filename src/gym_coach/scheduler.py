@@ -38,9 +38,12 @@ class Scheduler:
             self._close_day(now.date().isoformat())
 
     def _close_day(self, day: str) -> None:
-        """Silently mark the day done when sets were logged but the flow never closed."""
+        """Silently mark the day done when sets were logged but the flow never closed, and
+        close a workout he never ended."""
         if reports.mark_done(self.store, day):
             log.info("day closed at the evening check")
+        if reports.close_workout(self.store, day):
+            log.info("workout closed at the evening check")
 
     def _send_body_prompt(self, day: str) -> None:
         marker = f"sent:body:{day}"

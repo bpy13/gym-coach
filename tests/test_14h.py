@@ -202,17 +202,19 @@ def test_unknown_name_without_own_is_logged_as_the_shown_exercise(store):
     assert [r["exercise"] for r in store.logged_sets(DAY)] == ["Press"]
 
 
-# (5) "X and Y now missing" shows the log and changes nothing
+# (5) "X and Y now missing" is never a plan change (Task 14i adds the check against the chat)
 
 def test_missing_sets_message_shows_the_log_and_changes_nothing(store):
     reports.log_report(store, DAY, [{"exercise": "Press", "weight_kg": 20, "reps": 10}] * 2)
     store.add_plan_session("2026-11-24", "home", "strength", "proposed", EXS)
-    router, fake = build(store, [json.dumps({"intent": "log_check"})])[1:]
+    router, fake = build(store, [json.dumps({"intent": "log_check"}),
+                                 json.dumps({"verdict": "misread"})])[1:]
     before = store.plan_sessions("2026-11-01", "2026-12-31")
     reply = router.handle("leg ext and shoulder now missing")
     assert "Press: 20 kg x 10, 10" in reply
     assert "Missing: Pulldown (0 of 2), Leg ext (0 of 2), Shoulder (0 of 2)" in reply
-    assert len(store.logged_sets(DAY)) == 2 and len(fake.calls) == 1
+    assert len(store.logged_sets(DAY)) == 2 and len(fake.calls) == 2
+    assert all(c["model"] == "claude-haiku-5-5" for c in fake.calls)
     assert store.plan_sessions("2026-11-01", "2026-12-31") == before
 
 
