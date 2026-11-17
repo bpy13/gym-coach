@@ -22,13 +22,16 @@ NOT_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
 HTTP_TIMEOUT = httpx.Timeout(connect=10, read=POLL_TIMEOUT_S + 10, write=10, pool=10)
 
 
+KEEPALIVE_S = 30.0
+
+
 def new_http_client() -> httpx.Client:
-    """No pooled keep-alive sockets: every call opens a fresh connection, so a dead idle
-    socket can never be reused for the next long poll."""
+    """Kept connections, dropped after 30 s idle. Task 14f, 200 getMe calls each from this
+    PC: a new connection per call failed 26-28 times in the TLS handshake (SSL
+    UNEXPECTED_EOF_WHILE_READING), median 0.85 s; a kept one failed 0 times, median 0.28 s."""
     return httpx.Client(
         timeout=HTTP_TIMEOUT,
-        limits=httpx.Limits(max_keepalive_connections=0),
-        headers={"Connection": "close"},
+        limits=httpx.Limits(max_keepalive_connections=2, keepalive_expiry=KEEPALIVE_S),
     )
 PAIRED_REPLY = "Paired with this account. I will answer only you."
 

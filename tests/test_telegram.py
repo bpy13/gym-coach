@@ -162,12 +162,12 @@ def test_set_owner_overrides_pairing():
     assert _client(handler, ME, paired).get_updates() == [] and paired == []
 
 
-def test_default_client_has_explicit_timeouts_and_no_keepalive():
+def test_default_client_has_explicit_timeouts_and_keeps_its_connection():
     from gym_coach.telegram import POLL_TIMEOUT_S, new_http_client
     c = new_http_client()
     assert c.timeout.read == POLL_TIMEOUT_S + 10
     assert c.timeout.connect == 10 and c.timeout.write == 10 and c.timeout.pool == 10
-    assert c.headers["connection"] == "close"
+    assert c.headers.get("connection") != "close"  # a new TLS handshake fails 1 in 7 here
     c.close()
 
 
