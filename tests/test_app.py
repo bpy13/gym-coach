@@ -4,7 +4,7 @@ from fakes import FakeTelegram
 from gym_coach import __main__ as entry
 from gym_coach.app import AlreadyRunning, App, InstanceLock, run_forever
 from gym_coach.store import Store
-from gym_coach.telegram import Incoming
+from gym_coach.telegram import Incoming, TelegramError
 
 
 class StubRouter:
@@ -131,3 +131,98 @@ def test_logon_task_runs_at_normal_priority():
     scripts = Path(__file__).resolve().parent.parent / "scripts"
     text = (scripts / "install-logon-task.ps1").read_text(encoding="utf-8")
     assert re.search(r"New-ScheduledTaskSettingsSet[^\n]*`?\n?[^\n]*-Priority 4\b", text)
+
+
+# Task 14f: one failing part never stops the text reply
+
+class FailingTelegram(FakeTelegram):
+    def __init__(self, *a, fail_pictures=False, fail_texts=(), fail_download=False, **kw):
+        super().__init__(*a, **kw)
+        self.fail_pictures, self.fail_texts, self.fail_download = (
+            fail_pictures, set(fail_texts), fail_download)
+
+    def send_pictures(self, chat_id, images, caption):
+        if self.fail_pictures:
+            raise TelegramError("send album failed: ConnectError")
+        super().send_pictures(chat_id, images, caption)
+
+    def send_message(self, chat_id, text):
+        if text in self.fail_texts:
+            raise TelegramError("sendMessage failed: ConnectError")
+        super().send_message(chat_id, text)
+
+    def download_file(self, file_id):
+        if self.fail_download:
+            raise TelegramError("download failed: ConnectError")
+        return super().download_file(file_id)
+
+
+class FlowRouter(StubRouter):
+    """Each reply moves on to exercise 1 of a two-exercise session."""
+    def __init__(self):
+        super().__init__()
+        self._next = None
+        self.session = {"exercises": [{"name": "Squat"}, {"name": "Row"}]}
+
+    def handle(self, text):
+        self._next = (self.session, 1)
+        return super().handle(text)
+
+    def pop_exercise(self):
+        shown, self._next = self._next, None
+        return shown
+
+
+def test_failing_album_still_sends_the_text(store):
+    tg = FailingTelegram(fail_pictures=True)
+    app = App(tg, FlowRouter(), store, exercise_for=lambda s, i: ("Row 3x10", [b"jpg"]))
+    app.handle(Incoming(1, 5, text="done"))
+    assert tg.sent == [(5, "re:done"), (5, "Row 3x10")]
+
+
+def test_failing_exercise_message_still_sends_the_reply(store):
+    tg = FailingTelegram(fail_pictures=True, fail_texts={"Row 3x10"})
+    app = App(tg, FlowRouter(), store, exercise_for=lambda s, i: ("Row 3x10", [b"jpg"]))
+    app.handle(Incoming(1, 5, text="done"))  # no raise
+    assert tg.sent == [(5, "re:done")]
+
+
+def test_broken_exercise_builder_still_sends_the_reply(store):
+    def boom(s, i):
+        raise RuntimeError("x")
+    tg = FakeTelegram()
+    app = App(tg, FlowRouter(), store, exercise_for=boom)
+    app.handle(Incoming(1, 5, text="done"))
+    assert tg.sent[0] == (5, "re:done") and len(tg.sent) == 2
+
+
+def test_failing_photo_download_still_answers(store):
+    tg = FailingTelegram(fail_download=True)
+    App(tg, StubRouter(), store).handle(Incoming(1, 5, photo_file_id="f"))
+    assert len(tg.sent) == 1 and "photo" in tg.sent[0][1].lower()
+
+
+def test_failing_part_does_not_stop_later_parts(store):
+    tg = FailingTelegram(fail_pictures=True, fail_texts={"one"})
+    App(tg, StubRouter(), store).send_parts(5, [("one", [b"x"]), ("two", [b"y"]), ("three", [])])
+    assert tg.sent == [(5, "two"), (5, "three")]
+
+
+def test_one_log_line_per_message_and_per_reply(store, caplog):
+    import logging
+    caplog.set_level(logging.INFO, logger="gym_coach.app")
+    tg = FakeTelegram()
+    app = App(tg, FlowRouter(), store, exercise_for=lambda s, i: ("Row 3x10", [b"a", b"b"]))
+    app.handle(Incoming(1, 5, text="squat 40 kg 10 10 10"))
+    lines = [r.getMessage() for r in caplog.records]
+    assert any(m == "received text (20 chars)" for m in lines)
+    sent = [m for m in lines if m.startswith("replied:")]
+    assert len(sent) == 1 and "2 messages" in sent[0] and "2 pictures" in sent[0]
+    assert "squat" not in " ".join(lines)
+
+
+def test_failing_reply_still_sends_the_exercise(store):
+    tg = FailingTelegram(fail_texts={"re:done"})
+    app = App(tg, FlowRouter(), store, exercise_for=lambda s, i: ("Row 3x10", [b"jpg"]))
+    app.handle(Incoming(1, 5, text="done"))  # no raise
+    assert tg.pictures == [(5, [b"jpg"], "Row 3x10")]

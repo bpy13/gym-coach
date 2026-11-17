@@ -169,3 +169,91 @@ def test_default_client_has_explicit_timeouts_and_no_keepalive():
     assert c.timeout.connect == 10 and c.timeout.write == 10 and c.timeout.pool == 10
     assert c.headers["connection"] == "close"
     c.close()
+
+
+# Task 14f: a send that cannot connect is tried again (pauses 1, 3, 8 s), never once answered
+
+def _flaky(fails, ok_response, exc=httpx.ConnectError):
+    """A handler that raises `exc` `fails` times, then answers with `ok_response()`."""
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.path)
+        if len(calls) <= fails:
+            raise exc("[SSL: UNEXPECTED_EOF_WHILE_READING] EOF", request=req)
+        return ok_response()
+    return handler, calls
+
+
+def _ok():
+    return httpx.Response(200, json={"ok": True, "result": {}})
+
+
+def test_send_that_fails_twice_then_works_delivers_once():
+    handler, calls = _flaky(2, _ok)
+    tg, sleeps = make(handler)
+    tg.send_message(ME, "hi")
+    assert len(calls) == 3 and sleeps == [1, 3]
+
+
+def test_send_gives_up_after_four_tries_with_the_cause_and_no_token():
+    handler, calls = _flaky(99, _ok)
+    tg, sleeps = make(handler)
+    with pytest.raises(TelegramError) as ei:
+        tg.send_message(ME, "hi")
+    assert len(calls) == 4 and sleeps == [1, 3, 8]
+    assert "UNEXPECTED_EOF" in str(ei.value) and TOKEN not in str(ei.value)
+
+
+def test_send_is_not_repeated_once_telegram_answered():
+    calls = []
+
+    def handler(req):
+        calls.append(1)
+        return httpx.Response(400, json={"ok": False, "description": "Bad Request"})
+
+    tg, sleeps = make(handler)
+    with pytest.raises(TelegramError):
+        tg.send_message(ME, "hi")
+    assert len(calls) == 1 and sleeps == []
+
+
+def test_send_is_not_repeated_after_a_read_timeout():
+    handler, calls = _flaky(1, _ok, exc=httpx.ReadTimeout)
+    tg, _ = make(handler)
+    with pytest.raises(TelegramError):
+        tg.send_message(ME, "hi")
+    assert len(calls) == 1
+
+
+def test_album_and_single_picture_are_tried_again():
+    handler, calls = _flaky(1, _ok)
+    tg, sleeps = make(handler)
+    tg.send_pictures(ME, [b"a", b"b"], "cap")
+    tg.send_pictures(ME, [b"a"], "cap")
+    assert [p.rsplit("/", 1)[1] for p in calls] == ["sendMediaGroup", "sendMediaGroup",
+                                                     "sendPhoto"]
+    assert sleeps == [1]
+
+
+def test_download_is_tried_again():
+    calls = []
+
+    def handler(req):
+        calls.append(req.url.path)
+        if len(calls) in (1, 3):
+            raise httpx.ConnectTimeout("slow", request=req)
+        if req.url.path.endswith("/getFile"):
+            return httpx.Response(200, json={"ok": True, "result": {"file_path": "p/1.jpg"}})
+        return httpx.Response(200, content=b"JPEGDATA")
+
+    tg, sleeps = make(handler)
+    assert tg.download_file("f") == b"JPEGDATA"
+    assert len(calls) == 4 and sleeps == [1, 1]
+
+
+def test_poll_is_not_retried_inside_the_call():
+    handler, calls = _flaky(99, _ok)
+    tg, sleeps = make(handler)
+    assert tg.get_updates() == []
+    assert len(calls) == 1 and len(sleeps) == 1

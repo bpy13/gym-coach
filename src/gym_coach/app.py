@@ -21,6 +21,7 @@ from gym_coach.telegram import TelegramClient
 
 log = logging.getLogger(__name__)
 RESTART_PAUSE_S = 30.0
+PHOTO_FAILED = "I could not fetch that photo from Telegram. Please send it again."
 
 
 class App:
@@ -32,19 +33,47 @@ class App:
         self.router = router
         self.store = store
         self.chat_id = chat_id
+        self._count = [0, 0]  # messages and pictures sent since the last reset
 
     def handle(self, incoming) -> None:
-        """Reply to one incoming message: a meal photo (kept in memory only) or text."""
+        """Reply to one incoming message: a meal photo (kept in memory only) or text.
+        Logs one line on receipt (kind and length, never the text) and one when replied."""
+        started = time.monotonic()
+        self._count = [0, 0]
+        if incoming.photo_file_id:
+            log.info("received photo (caption %d chars)", len(incoming.caption or ""))
+        else:
+            log.info("received text (%d chars)", len((incoming.text or "").strip()))
+        try:
+            self._handle(incoming)
+        finally:
+            log.info("replied: %d messages, %d pictures, %.1f s after receipt",
+                     self._count[0], self._count[1], time.monotonic() - started)
+
+    def _text(self, chat_id: int, text: str) -> None:
+        self.telegram.send_message(chat_id, text)
+        self._count[0] += 1
+
+    def _pictures(self, chat_id: int, images: list, caption: str) -> None:
+        self.telegram.send_pictures(chat_id, images, caption)
+        self._count[0] += 1
+        self._count[1] += len(images)
+
+    def _handle(self, incoming) -> None:
         self.store.set("chat_id", str(incoming.chat_id))
         self.chat_id = incoming.chat_id
         if incoming.photo_file_id:
-            jpeg = self.telegram.download_file(incoming.photo_file_id)
-            self.telegram.send_message(
-                incoming.chat_id, self.router.handle_photo(jpeg, incoming.caption))
+            try:
+                jpeg = self.telegram.download_file(incoming.photo_file_id)
+            except Exception:
+                log.exception("downloading the photo failed")
+                self._text(incoming.chat_id, PHOTO_FAILED)
+                return
+            self._text(incoming.chat_id, self.router.handle_photo(jpeg, incoming.caption))
             return
         text = (incoming.text or "").strip()
         if not text:
-            self.telegram.send_message(incoming.chat_id, "I can only read text for now.")
+            self._text(incoming.chat_id, "I can only read text for now.")
             return
         reply = self.router.handle(text)
         if text.split()[0].lower() == "/start" and not self._has_upcoming_plan():
@@ -55,23 +84,27 @@ class App:
                 self.send_parts(incoming.chat_id, self.parts_for(session, closing=False))
             except Exception:
                 log.exception("sending the proposal's pictures failed")
-        self.telegram.send_message(incoming.chat_id, reply)
-        self._send_exercise(incoming.chat_id)
-
-    def _send_exercise(self, chat_id: int) -> None:
-        """The exercise the router just moved to, after its short reply, so he reads it
-        while resting."""
-        shown = self.router.pop_exercise()
+        shown = self.router.pop_exercise()  # taken before the send, so a failure keeps no state
+        try:
+            self._text(incoming.chat_id, reply)
+        except Exception:
+            log.exception("sending the reply failed")  # the exercise below still goes out
         if shown is not None:
-            self.send_exercise(chat_id, *shown)
+            # the exercise the router just moved to, after its short reply, so he reads it
+            # while resting
+            self.send_exercise(incoming.chat_id, *shown)
 
     def send_exercise(self, chat_id: int, session: dict, index: int) -> None:
         try:
             part = (self.exercise_for(session, index) if self.exercise_for
                     else (exercise_line(session["exercises"][index]), []))
         except Exception:
-            log.exception("building the exercise message failed; sending text")
-            part = (exercise_line(session["exercises"][index]), [])
+            log.exception("building the exercise message failed; sending its name")
+            ex = session["exercises"][index]
+            try:
+                part = (exercise_line(ex), [])
+            except (KeyError, TypeError, ValueError):
+                part = (str(ex.get("name", "Next exercise")), [])
         self.send_parts(chat_id, [part])
 
     def _has_upcoming_plan(self) -> bool:
@@ -88,16 +121,21 @@ class App:
 
     def send_parts(self, chat_id: int, parts) -> None:
         """Each part is (text, images): pictures with the text as their one caption, or the
-        text alone. A picture that fails to send falls back to its caption as text."""
+        text alone. A picture that fails to send falls back to its caption as text; a part
+        that cannot be sent at all is logged and skipped, so later parts still go out."""
         for text, images in parts:
-            if not images:
-                self.telegram.send_message(chat_id, text)
-                continue
             try:
-                self.telegram.send_pictures(chat_id, images, text)
+                if images:
+                    try:
+                        self._pictures(chat_id, images, text)
+                        continue
+                    except Exception:
+                        log.exception("sending pictures failed; sending the text")
+                self._text(chat_id, text)
+                if images:
+                    log.info("sent the text in place of the pictures")
             except Exception:
-                log.exception("sending pictures failed; sending the text")
-                self.telegram.send_message(chat_id, text)
+                log.exception("sending a message part failed; going on")
 
     def send_exercise_to_owner(self, session: dict, index: int) -> None:
         chat = self.chat_id or int(self.store.get("chat_id") or 0)

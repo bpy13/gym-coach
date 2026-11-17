@@ -14,6 +14,10 @@ MAX_MESSAGE_CHARS = 4000
 MAX_PHOTO_EDGE = 1280
 POLL_TIMEOUT_S = 50
 RETRY_PAUSE_S = 5.0
+# A send that could not connect is tried again after these pauses (4 tries in all). Only
+# errors raised before the request left this PC are retried, so Telegram never gets it twice.
+SEND_PAUSES_S = (1, 3, 8)
+NOT_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
 # Explicit per-phase limits: the read limit must outlast the long poll by a margin.
 HTTP_TIMEOUT = httpx.Timeout(connect=10, read=POLL_TIMEOUT_S + 10, write=10, pool=10)
 
@@ -89,14 +93,38 @@ class TelegramClient:
     def _url(self, method: str) -> str:
         return f"https://api.telegram.org/bot{self._token}/{method}"
 
-    def _call(self, method: str, payload: dict) -> list | dict:
+    def _cause(self, exc: Exception) -> str:
+        """Error name and cause text, without the token (the URL holds it)."""
+        text = str(exc).replace(self._token, "<token>")
+        return f"{type(exc).__name__} ({text[:160]})" if text else type(exc).__name__
+
+    def _request(self, what: str, send: Callable[[], httpx.Response],
+                 retry: bool = True) -> httpx.Response:
+        """`send()` once, or again after a pause while it fails to connect."""
+        pauses = SEND_PAUSES_S if retry else ()
+        for attempt in range(len(pauses) + 1):
+            try:
+                resp = send()
+                resp.raise_for_status()
+                return resp
+            except NOT_SENT as exc:
+                if attempt == len(pauses):
+                    raise TelegramError(f"{what} failed: {self._cause(exc)}") from None
+                log.warning("%s could not connect: %s; try %d of %d in %g s", what,
+                            self._cause(exc), attempt + 2, len(pauses) + 1, pauses[attempt])
+                self._sleep(pauses[attempt])
+            except httpx.HTTPError as exc:
+                # Never include the URL (it holds the token) in the log or the error.
+                raise TelegramError(f"{what} failed: {self._cause(exc)}") from None
+        raise AssertionError("unreachable")
+
+    def _call(self, method: str, payload: dict, retry: bool = True) -> list | dict:
+        resp = self._request(method, lambda: self._http.post(self._url(method), json=payload),
+                             retry)
         try:
-            resp = self._http.post(self._url(method), json=payload)
-            resp.raise_for_status()
             data = resp.json()
-        except (httpx.HTTPError, ValueError) as exc:
-            # Never include the URL (it holds the token) in the log or the error.
-            raise TelegramError(f"{method} failed: {type(exc).__name__}") from None
+        except ValueError:
+            raise TelegramError(f"{method} failed: bad JSON") from None
         if not data.get("ok"):
             raise TelegramError(f"{method} failed: {data.get('description', 'unknown error')}")
         return data["result"]
@@ -107,7 +135,7 @@ class TelegramClient:
         if self.offset is not None:
             payload["offset"] = self.offset
         try:
-            raw = self._call("getUpdates", payload)
+            raw = self._call("getUpdates", payload, retry=False)  # the poll loop retries
         except TelegramError as exc:
             log.warning("%s; retrying after a pause", exc)
             self._sleep(RETRY_PAUSE_S)
@@ -156,33 +184,30 @@ class TelegramClient:
                                   for i, img in enumerate(images)])
 
     def _send_group(self, chat_id: int, photos: list[tuple[bytes, str]]) -> None:
-        try:
-            if len(photos) == 1:
-                data, caption = photos[0]
-                resp = self._http.post(
+        if len(photos) == 1:
+            data, caption = photos[0]
+
+            def send():
+                return self._http.post(
                     self._url("sendPhoto"),
                     data={"chat_id": chat_id, "caption": caption[:1024]},
                     files={"photo": ("photo.jpg", data, "image/jpeg")},
                 )
-            else:
-                media = [{"type": "photo", "media": f"attach://p{i}", "caption": cap[:1024]}
-                         for i, (_, cap) in enumerate(photos)]
-                resp = self._http.post(
-                    self._url("sendMediaGroup"),
-                    data={"chat_id": chat_id, "media": json.dumps(media)},
-                    files={f"p{i}": (f"p{i}.jpg", d, "image/jpeg")
-                           for i, (d, _) in enumerate(photos)},
-                )
-            resp.raise_for_status()
-        except httpx.HTTPError as exc:
-            raise TelegramError(f"send album failed: {type(exc).__name__}") from None
+            self._request("send photo", send)
+            return
+        media = [{"type": "photo", "media": f"attach://p{i}", "caption": cap[:1024]}
+                 for i, (_, cap) in enumerate(photos)]
+
+        def send_group():
+            return self._http.post(
+                self._url("sendMediaGroup"),
+                data={"chat_id": chat_id, "media": json.dumps(media)},
+                files={f"p{i}": (f"p{i}.jpg", d, "image/jpeg")
+                       for i, (d, _) in enumerate(photos)},
+            )
+        self._request("send album", send_group)
 
     def download_file(self, file_id: str) -> bytes:
         info = self._call("getFile", {"file_id": file_id})
         url = f"https://api.telegram.org/file/bot{self._token}/{info['file_path']}"
-        try:
-            resp = self._http.get(url)
-            resp.raise_for_status()
-        except httpx.HTTPError as exc:
-            raise TelegramError(f"download failed: {type(exc).__name__}") from None
-        return resp.content
+        return self._request("download", lambda: self._http.get(url)).content

@@ -27,13 +27,18 @@ _KINDS = (("dumbbell", "dumbbell"), ("cable", "cable"), ("ez curl", "e-z curl ba
 _STOP = {"the", "a", "with", "to", "on", "of", "and", "dumbbell", "cable", "barbell", "ez", "bar",
          "machine"}
 _LYING = {"lying", "prone", "supine", "incline", "decline", "flat"}
+# Weight-stack pulldown and low-row towers: the catalogue files these exercises under cable.
+_CABLE_TOWERS = ("pulldown", "pull-down", "low row")
 
 
 def kinds_of(equipment: str) -> set[str]:
     """The database equipment values an exercise's equipment name stands for; a name with no
     free-weight or cable word is one of Brian's machines."""
     low = str(equipment).lower()
-    return {kind for word, kind in _KINDS if word in low} or {"machine"}
+    kinds = {kind for word, kind in _KINDS if word in low} or {"machine"}
+    if any(word in low for word in _CABLE_TOWERS):
+        kinds.add("cable")
+    return kinds
 
 
 def position(name: str) -> str | None:
@@ -148,7 +153,7 @@ class Illustrations:
         kinds = kinds_of(equipment)
         want = _words(name)
         want_pos = position(name)
-        best, best_score = None, 0.0
+        best, best_score = None, (0.0,)
         for i, n in allowed.items():
             if (self.catalog().get(i) or {}).get("equipment") not in kinds:
                 continue
@@ -157,10 +162,14 @@ class Illustrations:
             have = _words(n)
             if not want or not have:
                 continue
-            score = len(want & have) / len(want | have)
+            overlap = len(want & have) / len(want | have)
+            score = overlap
             small, large = sorted((want, have), key=len)
             if len(small) >= 2 and small <= large:  # one name only adds detail to the other
                 score = max(score, 0.7)
-            if score > best_score:
-                best, best_score = i, score
-        return best if best_score >= 0.7 else None
+            # ties: the closer name, then a two-handed variant over a one-arm one
+            one_arm = bool(have & {"one", "single"}) and not want & {"one", "single"}
+            key = (score, overlap, not one_arm)
+            if key > best_score:
+                best, best_score = i, key
+        return best if best_score[0] >= 0.7 else None

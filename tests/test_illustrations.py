@@ -329,3 +329,23 @@ def test_caption_has_one_tip_line_by_default(ill, gym_files):
     assert len(imgs) == 2
     (caption, _), = session_parts(session, eq, photos, illustrations=i, show_tip=False)[1:-1]
     assert caption == "Goblet squat: 3 x 8-12 at 10 kg"
+
+
+def test_pulldown_and_low_row_towers_use_the_cable_pictures(tmp_path):
+    """Task 14f: the catalogue files lat pulldowns and low rows under cable."""
+    def entry(i, name, level="beginner", equipment="cable"):
+        return {"id": i, "name": name, "equipment": equipment, "level": level,
+                "category": "strength", "images": [], "instructions": []}
+    cat = [entry("Close_Front", "Close-Grip Front Lat Pulldown"),
+           entry("One_Arm", "One Arm Lat Pulldown"),
+           entry("Wide", "Wide-Grip Lat Pulldown"),
+           entry("Seated_Rows", "Seated Cable Rows"),
+           entry("Low_Neck", "Low Pulley Row To Neck"),
+           entry("Iso_Row", "Leverage Iso Row", equipment="machine")]
+    i = Illustrations(tmp_path / "c", http_get=lambda url: json.dumps(cat).encode())
+    pool = i.allowed({"dual adjustable cable machine", "lat pulldown"}, machines=True)
+    assert i.match("Lat pulldown", "lat pulldown", pool) == "Wide"
+    assert i.match("Seated low row", "lat pulldown with low row (one tower", pool) == "Seated_Rows"
+    assert i.fits("Wide", "lat pulldown", "Lat pulldown")
+    assert i.fits("Iso_Row", "lat pulldown with low row")  # still a machine too
+    assert not i.fits("Wide", "chest press")
