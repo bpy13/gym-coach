@@ -475,7 +475,7 @@ still wait for Task 11.
     `sending pictures failed` without a later successful send, and the count of
     `ConnectError` lines per hour written beside today's (about 8 an hour).
 
-- [ ] **Task 14g: what the 17 Nov session shows beyond lost sends (bug, live)** (opus) `[parallel-ok]` (taken: slot 1, 2026-11-17 17:29)
+- [ ] **Task 14g: what the 17 Nov session shows beyond lost sends (bug, live)** (opus) `[parallel-ok]` (waiting: next real session, Thu 19 Nov; code on main and bot restarted 17:40:39 on it; orchestrator reads the `chat` table and `data/bot.log`)
   - Brian, 2026-11-17: "Can you see the conversation? If so you should be able to figure out
     along with the gym app trace and log". The bot keeps no message text and the orchestrator
     cannot read his Telegram, so the session was rebuilt from `data/gym.db` (read-only) and
