@@ -1,6 +1,7 @@
 # Board: gym-coach
 
 ## Workers
+- slot 1: Task 14e (bot hangs at start), building
 
 ## Ready to build
 
