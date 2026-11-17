@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 
 import httpx
@@ -16,7 +17,7 @@ import httpx
 log = logging.getLogger(__name__)
 BASE = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main"
 DEFAULT_DIR = Path("data/illustrations")
-CUE_CHARS = 160
+CUE_CHARS = 60  # one line on a phone
 
 # words in an equipment name -> the database's equipment value
 _KINDS = (("dumbbell", "dumbbell"), ("cable", "cable"), ("ez curl", "e-z curl bar"),
@@ -111,7 +112,8 @@ class Illustrations:
     def cue(self, ex_id: str) -> str:
         """One short form cue: the first instruction sentence of the exercise."""
         steps = (self.catalog().get(ex_id) or {}).get("instructions") or []
-        text = str(steps[0]).strip() if steps else ""
+        text = " ".join(str(steps[0]).split()) if steps else ""
+        text = re.split(r"(?<=[.!?])\s", text, maxsplit=1)[0]
         return text if len(text) <= CUE_CHARS else text[:CUE_CHARS].rsplit(" ", 1)[0] + "..."
 
     def images(self, ex_id: str) -> list[bytes]:

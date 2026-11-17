@@ -87,7 +87,17 @@ def test_unreachable_network_gives_no_images_and_no_catalog(tmp_path):
 def test_cue_is_short(ill):
     i, _ = ill
     cue = i.cue("Goblet_Squat")
-    assert cue.startswith("Hold one dumbbell") and len(cue) <= 170 and cue.endswith("...")
+    assert cue == "Hold one dumbbell at your chest."
+
+
+def test_cue_cut_at_word_end_to_60_chars_one_line(tmp_path):
+    long = "Stand with your feet shoulder width apart and\nhold the bar low across your upper back. Then lift."
+    cat = [{"id": "X", "name": "X", "equipment": "barbell", "level": "beginner",
+            "category": "strength", "images": [], "instructions": [long]}]
+    i = Illustrations(tmp_path / "c", http_get=lambda url: json.dumps(cat).encode())
+    cue = i.cue("X")
+    assert cue == "Stand with your feet shoulder width apart and hold the bar..."
+    assert len(cue) <= 63 and chr(10) not in cue
 
 
 EQUIPMENT = """## Home gym (weekdays)
@@ -309,12 +319,13 @@ def test_machine_exercise_with_photo_gets_an_illustration_by_name(tmp_path):
     assert [e.get("illustration") for e in sessions[0]["exercises"]] == ["Leg_Ext", None]
 
 
-def test_caption_has_no_form_tip_by_default(ill, gym_files):
+def test_caption_has_one_tip_line_by_default(ill, gym_files):
     i, _ = ill
     eq, photos = gym_files
     session = {"date": "2026-11-17", "gym": "home", "kind": "strength", "exercises": [
         ex("Goblet squat", "dumbbells on a rack", illustration="Goblet_Squat")]}
     (caption, imgs), = session_parts(session, eq, photos, illustrations=i)[1:-1]
-    assert caption == "Goblet squat: 3 x 8-12 at 10 kg" and len(imgs) == 2
-    (caption, _), = session_parts(session, eq, photos, illustrations=i, show_tip=True)[1:-1]
-    assert caption.split(chr(10), 1)[1].startswith("Hold one dumbbell")
+    assert caption == "Goblet squat: 3 x 8-12 at 10 kg" + chr(10) + "Hold one dumbbell at your chest."
+    assert len(imgs) == 2
+    (caption, _), = session_parts(session, eq, photos, illustrations=i, show_tip=False)[1:-1]
+    assert caption == "Goblet squat: 3 x 8-12 at 10 kg"

@@ -49,7 +49,7 @@ def _pictures(ex: dict, ids: dict, photos_dir, gym: str, illustrations) -> tuple
 
 
 def exercise_parts(session: dict, index: int, equipment_path=None, photos_dir=None,
-                   illustrations=None, show_tip: bool = False) -> tuple[str, list[bytes]]:
+                   illustrations=None, show_tip: bool = True) -> tuple[str, list[bytes]]:
     """The message of exercise number `index` of a strength session, as (caption, jpeg images):
     its pictures, if any, with ONE caption (name, sets x reps at weight; the form cue only when
     `show_tip` is on, default off)."""
@@ -62,7 +62,7 @@ def exercise_parts(session: dict, index: int, equipment_path=None, photos_dir=No
 
 
 def session_parts(session: dict, equipment_path=None, photos_dir=None, illustrations=None,
-                  closing: bool = True, show_tip: bool = False) -> list[tuple[str, list[bytes]]]:
+                  closing: bool = True, show_tip: bool = True) -> list[tuple[str, list[bytes]]]:
     """All messages of a session at once, in order, as (text, jpeg images). Used for the
     proposal's preview; the daily session goes out one exercise at a time (the router).
 

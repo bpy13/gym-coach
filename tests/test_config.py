@@ -26,7 +26,7 @@ def test_defaults(tmp_path):
     assert cfg.model_fast == "claude-haiku-5-5"
     assert cfg.model_coach == "claude-opus-5-5"
     assert cfg.data_dir == "data"
-    assert cfg.show_form_tip is False
+    assert cfg.show_form_tip is True
 
 
 def test_overrides_comments_and_quotes(tmp_path):
@@ -75,5 +75,5 @@ def test_user_id_is_optional(tmp_path):
 
 
 def test_show_form_tip_setting(tmp_path):
-    cfg = load_config(write_env(tmp_path, SECRETS), environ={"SHOW_FORM_TIP": "on"})
-    assert cfg.show_form_tip is True
+    cfg = load_config(write_env(tmp_path, SECRETS), environ={"SHOW_FORM_TIP": "off"})
+    assert cfg.show_form_tip is False
