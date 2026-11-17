@@ -31,12 +31,14 @@ def main(argv: list[str]) -> int:
         else:
             print("config ok")
         return 0
-    from gym_coach import app
+    from gym_coach import boot
     try:
-        app.main(config)
-    except app.AlreadyRunning:
+        lock = boot.start(config)  # "starting" is in bot.log before the slower imports
+    except boot.AlreadyRunning:
         print("Another instance is already running.")
         return 1
+    from gym_coach import app
+    app.main(config, lock)
     return 0
 
 

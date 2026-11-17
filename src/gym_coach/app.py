@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import logging
-import logging.handlers
-import os
 import threading
 import time
 from datetime import timedelta
 from pathlib import Path
 
 from gym_coach.albums import exercise_parts, session_parts
+from gym_coach.boot import AlreadyRunning, InstanceLock, setup_logging, start  # noqa: F401
 from gym_coach.config import Config
 from gym_coach.illustrations import Illustrations
-from gym_coach.llm import Claude
+from gym_coach.llm import Claude, LazyAnthropic
 from gym_coach.messages import exercise_line
 from gym_coach.router import Router
 from gym_coach.scheduler import Scheduler
@@ -22,39 +21,6 @@ from gym_coach.telegram import TelegramClient
 
 log = logging.getLogger(__name__)
 RESTART_PAUSE_S = 30.0
-
-
-class AlreadyRunning(Exception):
-    """Another instance holds the lock file."""
-
-
-class InstanceLock:
-    """Exclusive lock file in the data folder; the OS drops it when the process ends."""
-
-    def __init__(self, path: Path | str):
-        self.path = Path(path)
-        self._fh = None
-
-    def acquire(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        fh = open(self.path, "a+b")  # noqa: SIM115 - kept open for the process lifetime
-        try:
-            if os.name == "nt":
-                import msvcrt
-                fh.seek(0)
-                msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            fh.close()
-            raise AlreadyRunning(str(self.path)) from None
-        self._fh = fh
-
-    def release(self) -> None:
-        if self._fh:
-            self._fh.close()
-            self._fh = None
 
 
 class App:
@@ -158,23 +124,15 @@ def run_forever(app: App, scheduler: Scheduler, should_stop=lambda: False,
             sleep(RESTART_PAUSE_S)
 
 
-def setup_logging(data_dir: Path) -> None:
-    data_dir.mkdir(parents=True, exist_ok=True)
-    handler = logging.handlers.RotatingFileHandler(
-        data_dir / "bot.log", maxBytes=500_000, backupCount=3, encoding="utf-8")
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
-    root = logging.getLogger()
-    root.addHandler(handler)
-    root.setLevel(logging.INFO)
-    logging.getLogger("httpx").setLevel(logging.WARNING)  # its URLs hold the bot token
-
-
 def build(config: Config) -> tuple[App, Scheduler, Store]:
-    import anthropic
     data = Path(config.data_dir)
     store = Store(data / "gym.db")
-    claude = Claude(anthropic.Anthropic(api_key=config.anthropic_api_key), store,
-                    config.monthly_ceiling_usd)
+
+    def make_client():
+        import anthropic  # ~2,800 modules: minutes on a busy PC, so never on the start path
+        return anthropic.Anthropic(api_key=config.anthropic_api_key)
+
+    claude = Claude(LazyAnthropic(make_client), store, config.monthly_ceiling_usd)
     illustrations = Illustrations(data / "illustrations")
     router = Router(store, claude, config.model_fast, config.model_coach,
                     illustrations=illustrations)
@@ -198,13 +156,26 @@ def build(config: Config) -> tuple[App, Scheduler, Store]:
     return app, scheduler, store
 
 
-def main(config: Config) -> None:
-    data = Path(config.data_dir)
-    lock = InstanceLock(data / "bot.lock")
-    lock.acquire()  # raises AlreadyRunning
-    setup_logging(data)
+def warm_up(client) -> threading.Thread:
+    """Load the Claude client in the background, so the first meal photo does not wait."""
+    def load():
+        try:
+            client.load()
+            log.info("claude client ready")
+        except Exception:
+            log.exception("loading the claude client failed; it retries on first use")
+
+    thread = threading.Thread(target=load, name="claude-warm-up", daemon=True)
+    thread.start()
+    return thread
+
+
+def main(config: Config, lock: InstanceLock | None = None) -> None:
+    """`lock` comes from `boot.start` when `__main__` already wrote the "starting" line."""
+    lock = lock or start(config)  # raises AlreadyRunning
     app, scheduler, store = build(config)
     log.info("bot started")
+    warm_up(app.router.claude.client)
     try:
         run_forever(app, scheduler)
     finally:

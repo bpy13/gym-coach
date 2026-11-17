@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import re
+import threading
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -54,14 +55,42 @@ def _parse_json(text: str):
     return json.loads(fenced.group(1) if fenced else text)
 
 
+class LazyAnthropic:
+    """Stands in for an `anthropic.Anthropic` and builds it on first use (thread-safe).
+
+    Importing the SDK reads about 2,800 modules; on a busy PC that took minutes and kept the
+    bot from starting (Task 14e). A failed load is retried on the next use.
+    """
+
+    def __init__(self, factory):
+        self._factory = factory
+        self._client = None
+        self._lock = threading.Lock()
+
+    def load(self):
+        with self._lock:
+            if self._client is None:
+                self._client = self._factory()
+            return self._client
+
+    @property
+    def messages(self):
+        return self.load().messages
+
+
 class Claude:
-    """`client` is an `anthropic.Anthropic` (or a fake with `messages.create`)."""
+    """`client` is an `anthropic.Anthropic`, a `LazyAnthropic`, or a fake with
+    `messages.create`."""
 
     def __init__(self, client, store, ceiling_usd: float, now=None):
         self._client = client
         self._store = store
         self._ceiling = ceiling_usd
         self._now = now or (lambda: datetime.now(HK))
+
+    @property
+    def client(self):
+        return self._client
 
     @property
     def ceiling_usd(self) -> float:

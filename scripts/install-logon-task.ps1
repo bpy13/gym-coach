@@ -10,8 +10,10 @@ $action = New-ScheduledTaskAction -Execute $pythonw -Argument '-m gym_coach' `
 # Task Scheduler needs DOMAIN\user here; a bare user name fails with "The parameter is incorrect".
 $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
+# Priority 4 is normal. The default 7 (below-normal CPU, low disk) starved the start for
+# 48 minutes on a busy PC (Task 14e).
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-    -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+    -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -Priority 4
 Register-ScheduledTask -TaskName 'gym-coach-bot' -Action $action -Trigger $trigger `
     -Settings $settings -Description 'Gym coach Telegram bot' -Force -ErrorAction Stop | Out-Null
 # Confirm from Task Scheduler itself, so a failed registration never reports success.

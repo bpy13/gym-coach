@@ -121,3 +121,13 @@ def test_logon_task_starts_pythonw_directly():
     assert "conhost" not in action and "powershell" not in action.lower()
     assert "ExecutionPolicy" not in text
     assert not (scripts / "run-bot.ps1").exists()
+
+
+def test_logon_task_runs_at_normal_priority():
+    """Task 14e: the default priority 7 (below normal CPU, low disk) starved the start for
+    48 minutes on a busy PC; 4 is normal."""
+    import re
+    from pathlib import Path
+    scripts = Path(__file__).resolve().parent.parent / "scripts"
+    text = (scripts / "install-logon-task.ps1").read_text(encoding="utf-8")
+    assert re.search(r"New-ScheduledTaskSettingsSet[^\n]*`?\n?[^\n]*-Priority 4\b", text)
