@@ -21,7 +21,6 @@ from gym_coach.telegram import TelegramClient, TelegramError
 
 log = logging.getLogger(__name__)
 RESTART_PAUSE_S = 30.0
-CHAT_DAYS = 30  # chat text kept this long (orchestrator, 2026-11-17)
 LATE = "(late) "
 PHOTO_FAILED = "I could not fetch that photo from Telegram. Please send it again."
 
@@ -43,21 +42,58 @@ class App:
         return self._now().astimezone(HK).isoformat(timespec="seconds")
 
     def handle(self, incoming) -> None:
-        """Reply to one incoming message: a meal photo (kept in memory only) or text.
-        Logs one line on receipt (kind and length, never the text) and one when replied."""
-        started = time.monotonic()
+        """Reply to one incoming message: a photo (kept in memory only) or text.
+        Logs one line on receipt (kind and length, never the text) and one when replied;
+        writes one trace row (Task 14h) with what the bot understood and the seconds taken."""
+        self._started = time.monotonic()
         self._count = [0, 0]
         if incoming.photo_file_id:
             log.info("received photo (caption %d chars)", len(incoming.caption or ""))
         else:
             log.info("received text (%d chars)", len((incoming.text or "").strip()))
+        try:  # "typing..." while the model reads it; a failure here changes nothing
+            self.telegram.send_chat_action(incoming.chat_id, "typing")
+        except TelegramError as exc:
+            log.info("typing action not sent: %s", exc)
+        claude = getattr(self.router, "claude", None)
+        self.router.understood = self.router.error = None  # nothing stale from the last one
+        self._trace = {"chat_row": None, "reply_s": None, "error": None,
+                       "received": self._stamp(), "calls": []}
+        if claude is not None:
+            claude.trace = self._trace["calls"]
         try:
-            self.store.prune_chat(
-                (self._now().astimezone(HK) - timedelta(days=CHAT_DAYS)).isoformat())
             self._handle(incoming)
+        except Exception as exc:
+            self._trace["error"] = f"{type(exc).__name__}: {exc}"[:300]
+            raise
         finally:
+            if claude is not None:
+                claude.trace = None
             log.info("replied: %d messages, %d pictures, %.1f s after receipt",
-                     self._count[0], self._count[1], time.monotonic() - started)
+                     self._count[0], self._count[1], time.monotonic() - self._started)
+            self._write_trace()
+
+    def _write_trace(self) -> None:
+        """One trace row: the chat row answered, what was understood, the model calls, the
+        seconds to the reply and any error. Never raises: a trace never stops a reply."""
+        t = self._trace
+        error = "; ".join(e for e in (self.router.error, t["error"]) if e)
+        try:
+            self.store.add_trace(t["chat_row"], t["received"], self.router.understood,
+                                 t["calls"], t["reply_s"], error or None)
+        except Exception:
+            log.exception("writing the trace failed")
+
+    def _reply(self, chat_id: int, text: str) -> None:
+        """Send the reply to his message; the trace keeps the seconds from receipt to it."""
+        try:
+            self._text(chat_id, text)
+        except Exception as exc:
+            self._trace["error"] = f"reply not delivered: {exc}"[:300]
+            raise
+        finally:
+            if self._trace["reply_s"] is None:
+                self._trace["reply_s"] = round(time.monotonic() - self._started, 2)
 
     def _text(self, chat_id: int, text: str, kind: str = "text") -> None:
         """Send and record a text. A text that fails (after the client's own tries) stays
@@ -96,32 +132,32 @@ class App:
 
     def _record_in(self, received: str, text: str) -> None:
         try:
-            self.store.add_chat(received, "in", text)
+            self._trace["chat_row"] = self.store.add_chat(received, "in", text)
         except Exception:
             log.exception("recording the message failed")
 
     def _handle(self, incoming) -> None:
         self.store.set("chat_id", str(incoming.chat_id))
         self.chat_id = incoming.chat_id
-        received = self._stamp()
+        received = self._trace["received"]
         if incoming.photo_file_id:
             try:
                 jpeg = self.telegram.download_file(incoming.photo_file_id)
             except Exception:
                 log.exception("downloading the photo failed")
                 self._record_in(received, "[photo, not fetched]")
-                self._text(incoming.chat_id, PHOTO_FAILED)
+                self._reply(incoming.chat_id, PHOTO_FAILED)
                 return
             try:
                 reply = self.router.handle_photo(jpeg, incoming.caption)
             finally:
                 self._record_in(received, ("[photo] " + (incoming.caption or "")).strip())
-            self._text(incoming.chat_id, reply)
+            self._reply(incoming.chat_id, reply)
             return
         text = (incoming.text or "").strip()
         if not text:
             self._record_in(received, "[not text]")
-            self._text(incoming.chat_id, "I can only read text for now.")
+            self._reply(incoming.chat_id, "I can only read text for now.")
             return
         try:  # recorded after the router read it, so its chat lines end before this one
             reply = self.router.handle(text)
@@ -137,7 +173,7 @@ class App:
                 log.exception("sending the proposal's pictures failed")
         shown = self.router.pop_exercise()  # taken before the send, so a failure keeps no state
         try:
-            self._text(incoming.chat_id, reply)
+            self._reply(incoming.chat_id, reply)
         except Exception:
             log.exception("sending the reply failed")  # the exercise below still goes out
         if shown is not None:

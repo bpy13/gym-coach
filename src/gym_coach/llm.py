@@ -6,6 +6,7 @@ import base64
 import json
 import re
 import threading
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -87,6 +88,9 @@ class Claude:
         self._store = store
         self._ceiling = ceiling_usd
         self._now = now or (lambda: datetime.now(HK))
+        # While the app handles one message it sets a list here; each call adds its model,
+        # seconds, tokens and reply text (Task 14h traces). None: nothing is kept.
+        self.trace: list | None = None
 
     @property
     def client(self):
@@ -129,14 +133,27 @@ class Claude:
             )
         content.append({"type": "text", "text": prompt})
         kwargs = {"system": system} if system else {}
-        response = self._client.messages.create(
-            model=model, max_tokens=MAX_TOKENS,
-            messages=[{"role": "user", "content": content}], **kwargs,
-        )
+        started = time.monotonic()
+        try:
+            response = self._client.messages.create(
+                model=model, max_tokens=MAX_TOKENS,
+                messages=[{"role": "user", "content": content}], **kwargs,
+            )
+        except Exception as exc:
+            self._traced(model, started, error=f"{type(exc).__name__}: {exc}"[:300])
+            raise
         usage = response.usage
         self._store.add_api_call(
             self._now().astimezone(HK).isoformat(), model,
             usage.input_tokens, usage.output_tokens,
             cost_usd(model, usage.input_tokens, usage.output_tokens),
         )
-        return "".join(b.text for b in response.content if getattr(b, "type", "") == "text")
+        reply = "".join(b.text for b in response.content if getattr(b, "type", "") == "text")
+        self._traced(model, started, image=jpeg is not None, input_tokens=usage.input_tokens,
+                     output_tokens=usage.output_tokens, reply=reply[:2000])
+        return reply
+
+    def _traced(self, model: str, started: float, **fields) -> None:
+        if self.trace is not None:
+            self.trace.append({"model": model,
+                               "seconds": round(time.monotonic() - started, 2), **fields})

@@ -174,6 +174,10 @@ class TelegramClient:
         for chunk in split_text(text):
             self._call("sendMessage", {"chat_id": chat_id, "text": chunk})
 
+    def send_chat_action(self, chat_id: int, action: str = "typing") -> None:
+        """Show "typing..." in his chat (about 5 s, or until the next message). One try."""
+        self._call("sendChatAction", {"chat_id": chat_id, "action": action}, retry=False)
+
     def send_album(self, chat_id: int, photos: list[tuple[bytes, str]]) -> None:
         """Send (jpeg bytes, caption) pairs as media groups of at most 10 (Telegram's limit);
         a single photo goes alone."""

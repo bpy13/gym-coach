@@ -56,9 +56,9 @@ def test_running_total_adds_up(store):
 
 
 def test_caption_goes_to_the_model(store):
-    router, fake = make(store, [meal("half chicken rice", 325, 18)])
+    router, fake = make(store, [json.dumps({"intent": "meal"}), meal("half chicken rice", 325, 18)])
     router.handle_photo(JPEG, "half portion")
-    blocks = fake.calls[0]["messages"][0]["content"]
+    blocks = fake.calls[1]["messages"][0]["content"]
     assert "half portion" in blocks[-1]["text"]
 
 

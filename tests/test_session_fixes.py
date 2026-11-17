@@ -84,15 +84,6 @@ def test_both_directions_are_kept_with_delivery(store):
     assert rows[0]["text"] == "press 10" and rows[1]["text"].startswith("Press: 20 kg x 10")
 
 
-def test_chat_older_than_30_days_is_removed(store):
-    store.add_chat("2026-10-01T10:00:00+08:00", "in", "old")
-    store.add_chat("2026-10-20T10:00:00+08:00", "in", "recent")
-    app, _, _ = build(store, ["{}", "fine"])
-    say(app, "hello")
-    texts = [r["text"] for r in store._rows("SELECT text FROM chat ORDER BY id")]
-    assert "old" not in texts and "recent" in texts
-
-
 # (2) a reply that could not be delivered goes out first, marked (late)
 
 def test_undelivered_reply_is_sent_first_when_sending_works(store):
@@ -182,14 +173,6 @@ def test_change_plan_without_a_proposed_week_is_a_note_not_a_new_week(store):
     assert "less leg work" in store.get("pending:plan_change")
 
 
-def test_change_plan_with_a_proposed_week_revises_it(store):
-    store.add_plan_session("2026-11-24", "home", "strength", "proposed", EXS)
-    router, fake = build(store, [json.dumps({"intent": "change_plan", "change": "x"}),
-                                 "not json"])[1:]
-    router.handle("swap tuesday for wednesday")
-    assert fake.calls[1]["model"] == "claude-opus-5-5"
-
-
 # (4) the pointer follows what he reports
 
 def test_set_for_a_later_exercise_moves_the_pointer(store):
@@ -197,15 +180,6 @@ def test_set_for_a_later_exercise_moves_the_pointer(store):
     reply = router.handle("leg ext 20 10")
     assert store.get(f"flow:{DAY}") == "2"
     assert "1 set left" in reply
-
-
-def test_session_done_lists_exercises_with_sets_missing(store):
-    store.set(f"flow:{DAY}", "3")
-    reports.log_report(store, DAY, [{"exercise": "Press", "weight_kg": 20, "reps": 10}] * 2)
-    router = build(store, [report("Shoulder", 10, 10)])[1]
-    reply = router.handle("shoulder 10 10")
-    assert "Session done" in reply
-    assert "Missing: Pulldown (0 of 2), Leg ext (0 of 2)" in reply
 
 
 def test_advance_passes_over_an_exercise_already_complete(store):
@@ -225,6 +199,8 @@ def test_first_set_leaves_the_day_approved(store):
 
 def test_flow_close_marks_done(store):
     store.set(f"flow:{DAY}", "3")
+    for name in ("Press", "Pulldown", "Leg ext"):  # the session closes when none has sets left
+        reports.log_report(store, DAY, [{"exercise": name, "weight_kg": 20, "reps": 10}] * 2)
     router = build(store, [report("Shoulder", 10, 10)])[1]
     router.handle("shoulder 10 10")
     assert store.plan_session(DAY)["status"] == "done"

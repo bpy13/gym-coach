@@ -8,9 +8,11 @@ from gym_coach import targets
 from gym_coach.llm import LLMError
 
 ESTIMATE_SYSTEM = """You estimate one meal's calories and protein for a gym-goer's food log.
-Answer JSON: {"description": "<short name of the meal>", "kcal": 650, "protein_g": 35}
+Answer JSON: {"meal": true, "what": "<what the photo shows, a few words>",
+"description": "<short name of the meal>", "kcal": 650, "protein_g": 35}
 Use the image and/or the text. A note such as "half portion" changes the amounts. Give your
-best single number for each, never a range."""
+best single number for each, never a range. A photo that shows no food or drink (gym
+equipment, a weight plate, a screen) is not a meal: answer {"meal": false, "what": "..."}."""
 
 
 def _number(value) -> float:
@@ -25,11 +27,14 @@ def _number(value) -> float:
 
 def log_meal(store, claude, model: str, now: datetime, text: str | None = None,
              jpeg: bytes | None = None) -> dict:
-    """Estimate one meal with the fast model, store the estimate (never the image), return it."""
+    """Estimate one meal with the fast model, store the estimate (never the image), return it.
+    A photo the model says is not a meal is stored as nothing: {"meal": False, "what": ...}."""
     prompt = text or "Estimate the meal in the photo."
     data = claude.json(model, prompt, system=ESTIMATE_SYSTEM, jpeg=jpeg)
     if not isinstance(data, dict):
         raise LLMError("The meal estimate was not an object")
+    if data.get("meal") is False:
+        return {"meal": False, "what": str(data.get("what") or "something else").strip()}
     meal = {"description": str(data.get("description") or text or "meal").strip(),
             "kcal": round(_number(data.get("kcal"))),
             "protein_g": round(_number(data.get("protein_g")))}

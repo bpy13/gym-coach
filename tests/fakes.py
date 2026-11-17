@@ -18,6 +18,9 @@ class FakeTelegram:
     def send_message(self, chat_id, text):
         self.sent.append((chat_id, text))
 
+    def send_chat_action(self, chat_id, action="typing"):
+        pass
+
     def send_album(self, chat_id, photos):
         self.albums.append((chat_id, list(photos)))
 

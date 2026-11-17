@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
+from gym_coach.llm import HK
+
 
 def _clean(raw_sets) -> list[dict]:
     """Keep well-formed sets from the model's extraction; drop the rest."""
@@ -24,13 +28,17 @@ def _key(name: str) -> str:
 
 
 def _rewrite(store, day: str, sets: list[dict]) -> None:
-    """Replace the day's logged sets with `sets`, numbering them per exercise."""
+    """Replace the day's logged sets with `sets`, numbering them per exercise. Rows read back
+    from the store keep their save time (empty for sets from before Task 14h); new sets are
+    stamped now."""
+    now = datetime.now(HK).isoformat(timespec="seconds")
     store.clear_logged_sets(day)
     counts: dict[str, int] = {}
     for s in sets:
         k = _key(s["exercise"])
         counts[k] = counts.get(k, 0) + 1
-        store.add_logged_set(day, s["exercise"], counts[k], s["weight_kg"], s["reps"], s["effort"])
+        store.add_logged_set(day, s["exercise"], counts[k], s["weight_kg"], s["reps"],
+                             s["effort"], s.get("saved_at", now))
 
 
 def log_report(store, day: str, raw_sets) -> list[dict]:

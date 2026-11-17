@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS plan_sessions (
     exercises TEXT NOT NULL DEFAULT '[]');
 CREATE TABLE IF NOT EXISTS logged_sets (
     id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, exercise TEXT NOT NULL,
-    set_no INTEGER NOT NULL, weight_kg REAL, reps INTEGER, effort TEXT);
+    set_no INTEGER NOT NULL, weight_kg REAL, reps INTEGER, effort TEXT, saved_at TEXT);
 CREATE TABLE IF NOT EXISTS meals (
     id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL,
     description TEXT NOT NULL, kcal REAL NOT NULL, protein_g REAL NOT NULL);
@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS chat (
     direction TEXT NOT NULL CHECK (direction IN ('in','out')),
     kind TEXT NOT NULL DEFAULT 'text', text TEXT NOT NULL,
     delivered INTEGER NOT NULL DEFAULT 1, late INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS trace (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, chat_row INTEGER, timestamp TEXT NOT NULL,
+    understood TEXT, calls TEXT NOT NULL DEFAULT '[]', seconds REAL, error TEXT);
 """
 
 
@@ -42,6 +45,11 @@ class Store:
         self._db = sqlite3.connect(str(path), check_same_thread=False)
         self._db.row_factory = sqlite3.Row
         self._db.executescript(_SCHEMA)
+        # Task 14h: a save time per logged set; a database from before gets the column,
+        # its old rows stay empty
+        columns = {r[1] for r in self._db.execute("PRAGMA table_info(logged_sets)")}
+        if "saved_at" not in columns:
+            self._db.execute("ALTER TABLE logged_sets ADD COLUMN saved_at TEXT")
         self._db.commit()
 
     def close(self) -> None:
@@ -85,11 +93,13 @@ class Store:
         self._run("UPDATE plan_sessions SET status=? WHERE date=?", (status, date))
 
     # logged sets
-    def add_logged_set(self, date, exercise, set_no, weight_kg, reps, effort=None) -> None:
+    def add_logged_set(self, date, exercise, set_no, weight_kg, reps, effort=None,
+                       saved_at=None) -> None:
+        """`saved_at`: ISO time the set was first saved (None for sets from before 14h)."""
         self._run(
-            "INSERT INTO logged_sets (date, exercise, set_no, weight_kg, reps, effort)"
-            " VALUES (?,?,?,?,?,?)",
-            (date, exercise, set_no, weight_kg, reps, effort),
+            "INSERT INTO logged_sets (date, exercise, set_no, weight_kg, reps, effort, saved_at)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (date, exercise, set_no, weight_kg, reps, effort, saved_at),
         )
 
     def logged_sets(self, date) -> list[dict]:
@@ -148,7 +158,8 @@ class Store:
             ).fetchone()
         return float(row[0])
 
-    # chat: what was said both ways (text kept 30 days); `delivered` = reached Telegram
+    # chat: what was said both ways, kept for good (Brian, for debugging); `delivered` =
+    # reached Telegram
     def add_chat(self, timestamp, direction, text, delivered=True, kind="text") -> int:
         with self._lock, self._db:
             cur = self._db.execute(
@@ -172,9 +183,13 @@ class Store:
         return self._rows("SELECT * FROM chat WHERE direction='out' AND kind='text'"
                           " AND delivered=0 AND timestamp>=? ORDER BY id", (since,))
 
-    def prune_chat(self, before) -> None:
-        """Remove chat rows older than `before` (ISO)."""
-        self._run("DELETE FROM chat WHERE timestamp<?", (before,))
+    # trace: per incoming message, what the bot understood and how long it took
+    def add_trace(self, chat_row, timestamp, understood, calls, seconds, error) -> None:
+        """`calls` is a list of dicts (one per model call); stored as JSON."""
+        self._run("INSERT INTO trace (chat_row, timestamp, understood, calls, seconds, error)"
+                  " VALUES (?,?,?,?,?,?)",
+                  (chat_row, timestamp, understood, json.dumps(calls, ensure_ascii=False),
+                   seconds, error))
 
     # kv
     def get(self, key, default=None):
