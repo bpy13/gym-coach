@@ -430,6 +430,11 @@ still wait for Task 11.
   - Notes: Brian, 2026-11-17: "gym: tip can be for later, drop it for now, and reconsider when I
     request".
 
+- [ ] **Task 14d: the form tip is back, as one short line** `[parallel-ok]`
+  - Why: Brian, 2026-11-17: "gym tip: if it's just one line it's okay" (after seeing that the tip is one line of text under the exercise line).
+  - Files: the caption builder (`src/gym_coach/albums.py`), the tip source (`src/gym_coach/illustrations.py`, `CUE_CHARS`), the setting from Task 14c, their tests.
+  - Done when: tests pass: with the default settings an exercise caption is the task line plus one tip line; the tip is the first instruction sentence, cut at a word end to at most 60 characters with "..." when longer (60 is the orchestrator's call for one line on a phone; Brian may change it), and holds no line break; the Task 14c setting still turns the tip off. Then restart the bot through its scheduled task and check `data/bot.log` shows "bot started" after the commit and no error; if the restart is refused, mark the task waiting on Brian's restart.
+
 - [ ] **Task 16: live check of meals** needs: Task 13, Task 14 (slot 1 only) (checkpoint) (waiting: inbox, 2026-11-16: bot restarted through the scheduled task at 15:31 on the Task 12-14 code, log clean; Brian sends one real meal photo at a real meal or session, question in docs/inbox.md. Slot 1 never committed this mark; the orchestrator restored it)
   - Done when: Brian sends one real meal photo and gets an estimate and a daily total; the
     month's cost in `/cost` rose by less than US$0.01 for that photo; the card asks Brian
