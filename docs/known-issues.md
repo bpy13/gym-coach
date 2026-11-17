@@ -42,9 +42,8 @@
   logged set a save time (`saved_at`; sets saved before 14h have none).
   `scripts\show_chat.py --day YYYY-MM-DD` prints a day in time order. The trace does not yet
   record what a message changed (sets rewritten, the session pointer); Brian holds that.
-  Limits: a plain "35 12" is read without a model call as a set of the exercise shown, so a
-  set for another exercise needs its name; right after a "Typo?" question a number goes to the
-  model as a possible correction. A photo without a caption that the model calls "not a meal"
+  Limits: every set report goes to the model (reading "35 12" without it was removed the same
+  day, Brian: "quite risky, no need"). A photo without a caption that the model calls "not a meal"
   stores nothing and the bot asks what it is; the image is not kept, so he sends it again with
   a caption. A future-week change asks "Revise the proposed week ...? Reply yes." only when no
   strength session is open today; any reply other than yes drops the question.

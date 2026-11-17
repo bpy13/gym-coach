@@ -297,39 +297,11 @@ def test_normal_weight_has_no_typo_question(store):
 
 # (9) faster replies
 
-def test_number_only_report_for_the_shown_exercise_needs_no_model_call(store):
-    router, fake = build(store, [])[1:]
-    router.handle("35 12")
-    router.handle("35kg 12, 10")
-    assert fake.calls == []
-    assert [(r["exercise"], r["weight_kg"], r["reps"]) for r in store.logged_sets(DAY)] == [
-        ("Press", 35, 12), ("Press", 35, 12), ("Press", 35, 10)]
-
-
-def test_number_only_report_traces_local(store):
-    app, _, fake = build(store, [])
-    say(app, "20 10")
-    assert fake.calls == [] and traces(store)[0]["understood"] == "local"
-
-
-@pytest.mark.parametrize("text", ["35 12 leg ext", "35", "3x10"])
-def test_other_texts_still_go_to_the_model(store, text):
+@pytest.mark.parametrize("text", ["35 12", "35kg 12, 10", "35"])
+def test_number_only_reports_go_to_the_model(store, text):
+    # Brian, 2026-11-17: reading "35 12" without the model is "quite risky, no need"
     router, fake = build(store, [json.dumps({"intent": "unclear", "question": "Which?"})])[1:]
     router.handle(text)
-    assert len(fake.calls) == 1
-
-
-def test_number_only_answer_to_a_typo_question_goes_to_the_model(store):
-    store.add_chat("2026-11-17T16:59:00+08:00", "out", "Press: 200 kg x 10. Typo? ...")
-    router, fake = build(store, [json.dumps({"intent": "correction", "sets": []})])[1:]
-    router.handle("20 10")
-    assert len(fake.calls) == 1
-
-
-def test_number_only_without_an_open_session_goes_to_the_model(store):
-    store.set(f"flow:{DAY}", "4")
-    router, fake = build(store, [json.dumps({"intent": "unclear", "question": "Which?"})])[1:]
-    router.handle("35 12")
     assert len(fake.calls) == 1
 
 

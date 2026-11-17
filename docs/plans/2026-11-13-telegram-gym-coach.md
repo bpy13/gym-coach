@@ -603,6 +603,24 @@ still wait for Task 11.
     exercise has sets left, on "end", or at the 21:00 close. (4) Each message's trace
     records the current exercise after it. Measure the added tokens and cost for a 40-message
     workout and write them on the board.
+    (5) Brian, 2026-11-17: "photo that sits within the gym session after start command is
+    never a meal picture, always a query": while a workout is open, a photo is never sent to
+    the meal estimate; it is read as a question or report about the workout.
+    (6) Brian, 2026-11-17: "it should only ask to plan the week AFTER the current week is
+    completed": the bot asks to plan or revise next week only once this week's last planned
+    session is done or skipped (or its day has passed); before that a week change is kept as
+    a note. (Inferred, to confirm: `/propose` typed by Brian still works at any time.)
+    (7) Repeat Telegram's "typing" action every 4 s until the reply is sent (it shows for
+    about 5 s only).
+    (8) Brian, 2026-11-17, on "X and Y now missing": "the bot should be able to intelligently
+    pick up that either something went wrong with the messages it sends or I misread it. It
+    should verify which is the case, and self correct if I am right or ask if I misread".
+    The bot checks his claim against the workout's chat and the saved sets. If he reported
+    sets in the chat that were never saved (or were saved wrong, or a reply never arrived),
+    it saves or fixes them and says what it changed. If the sets are saved as he reported
+    them, it shows them and asks whether he misread. Replaces Task 14h's "log_check" reply,
+    which only showed the log.
+    (9) The sorting call's JSON leaves out empty fields (about half a second per message).
   - Done when: failing tests first; tests and lint pass; the bot restarted; the next real
     workout checked in the chat and trace tables.
 

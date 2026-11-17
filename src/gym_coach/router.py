@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from datetime import date, datetime, timedelta
 
 from gym_coach import meals, planner, reports, targets
@@ -52,9 +51,6 @@ FLOW_KEY = "flow:"  # + day: index of the exercise shown now (kv); absent = not 
 PASSED_KEY = "passed:"  # + day: exercises he moved on from with next/done/skip, "|"-joined
 PHOTO_EDGE = 1024  # px; his photos are shrunk to this before an image call (Task 14h)
 TYPO_HIGH, TYPO_LOW = 1.5, 0.5  # a weight outside these times the plan or last set: "Typo?"
-# A plain set report for the exercise shown, read without a model call: weight, then reps
-# ("35 12", "35kg 12 12 10", "35 kg 12, 10").
-LOCAL_SETS = re.compile(r"^(\d+(?:\.\d+)?)\s*(?:kg)?((?:[\s,]+\d+)+)$", re.IGNORECASE)
 NEXT_WORDS = {"next", "done", "skip"}  # orchestrator's call, 2026-11-16; Brian may change it
 YES = {"yes", "y", "yep", "yeah", "ok", "correct", "right", "confirm"}
 
@@ -147,11 +143,6 @@ class Router:
             again = self._same_again(day)
             if again is not None:
                 return again
-        local = None if jpeg is not None else self._local_sets(day, text)
-        if local is not None:
-            if self._repeats_undelivered(day, text):
-                return self._state_reply(day)
-            return self._report(day, local)
         context = self.context(day)
         lead = ("New message from Brian (sent with a photo; this text is its caption)"
                 if jpeg is not None else "New message from Brian")
@@ -285,22 +276,6 @@ class Router:
         if not flagged:
             return ""
         return "\nTypo? " + "; ".join(dict.fromkeys(flagged)) + ". Reply with the right number."
-
-    def _local_sets(self, day: str, text: str) -> list[dict] | None:
-        """Sets of a plain report for the exercise shown ("35 12", "35kg 12 12 10"), read
-        without a model call; None for anything else, or right after a "Typo?" question."""
-        match = LOCAL_SETS.match(text)
-        shown = self._shown(day) if match else None
-        if shown is None:
-            return None
-        outs = [r for r in self.store.chat_lines(day, CHAT_LINES) if r["direction"] == "out"]
-        if outs and "Typo?" in outs[-1]["text"]:
-            return None  # his number may be the fix: the model reads it as a correction
-        reps = [int(r) for r in re.findall(r"\d+", match.group(2))]
-        if not all(1 <= r <= 100 for r in reps):
-            return None
-        name = shown[0]["exercises"][shown[1]]["name"]
-        return [{"exercise": name, "weight_kg": float(match.group(1)), "reps": r} for r in reps]
 
     def _same_again(self, day: str) -> str | None:
         """Log today's last set once more; None when nothing is logged yet today."""
