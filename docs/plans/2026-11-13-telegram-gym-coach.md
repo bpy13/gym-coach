@@ -440,7 +440,7 @@ still wait for Task 11.
   - What: find where it hangs (for example `py-spy dump` on the live pid, or `python -X importtime -v -m gym_coach` with a separate data folder and a fake token so the real lock, database and chat are not touched), fix the cause, and make the start log its first line before anything that can block ("starting", then "bot started"), with a timeout on every network call made during start. A failing test first where the cause can be tested.
   - Done when: after a restart of the scheduled task, `data/bot.log` shows "bot started" within 2 minutes of the process start, twice in a row, and no error after; tests and ruff pass. If the worker's restart is refused, mark the task waiting on Brian's stop and start (`Stop-ScheduledTask gym-coach-bot`, then `Start-ScheduledTask gym-coach-bot`), and say so in the ENDED message. It must be up before 07:00 on 18 Nov (next session message).
 
-- [ ] **Task 14f: replies and pictures get lost when a Telegram call fails (bug, live)** (opus) `[parallel-ok]`
+- [ ] **Task 14f: replies and pictures get lost when a Telegram call fails (bug, live)** (opus) `[parallel-ok]` (taken: slot 1, 2026-11-17 17:15)
   - Brian, 2026-11-17 17:10: "Please check gym project, app not behaving nirmally". Facts from
     `data/bot.log` (orchestrator, 17:12): the bot runs (started 15:21:48) and its Claude calls
     answer 200, but calls to Telegram fail now and then with `ConnectError`: 221 such lines in
