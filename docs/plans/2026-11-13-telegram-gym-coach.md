@@ -590,6 +590,22 @@ still wait for Task 11.
   - Done when: failing tests first for (2) to (8); tests and lint pass; the bot restarted on
     the new code; one real message checked in the chat and trace tables.
 
+- [ ] **Task 14i: the whole workout in view (bug, live)** (opus) needs: Task 14h (same files)
+  - Brian, 2026-11-17: "I've already proposed for the bot to keep history, at least throughout
+    the gym session. I can prompt to start the session which has context"; on how a workout
+    starts: "sure, default, it should intelligently pick up if gym session has already
+    started". Checked: Task 14g gives each model call only today's last 12 chat lines; on
+    17 Nov he sent about 40 messages in the workout.
+  - Do: (1) A workout opens on "start", or on its own when a message shows the workout has
+    begun (a set, or a question about one of today's exercises). The open time is kept.
+    (2) While it is open, every model call that reads a message gets every chat line since
+    it opened (not 12), plus the sets saved and the current exercise. (3) It closes when no
+    exercise has sets left, on "end", or at the 21:00 close. (4) Each message's trace
+    records the current exercise after it. Measure the added tokens and cost for a 40-message
+    workout and write them on the board.
+  - Done when: failing tests first; tests and lint pass; the bot restarted; the next real
+    workout checked in the chat and trace tables.
+
 - [ ] **Task 16: live check of meals** needs: Task 13, Task 14 (slot 1 only) (checkpoint) (waiting: inbox, 2026-11-16: bot restarted through the scheduled task at 15:31 on the Task 12-14 code, log clean; Brian sends one real meal photo at a real meal or session, question in docs/inbox.md. Slot 1 never committed this mark; the orchestrator restored it)
   - Done when: Brian sends one real meal photo and gets an estimate and a daily total; the
     month's cost in `/cost` rose by less than US$0.01 for that photo; the card asks Brian
