@@ -541,6 +541,55 @@ still wait for Task 11.
     an undelivered reply logs once; "same again" logs the last set again): every message of his has a delivered
     reply, the pointer matches the sets logged, and no new week appears unless he asked.
 
+- [ ] **Task 14h: Brian's 17 Nov list: traces, photo kinds, own exercises, no surprise weeks, faster replies (bug, live)** (opus) (Brian's direct instructions, 2026-11-17 evening; built in his chat session, not by a worker)
+  - Brian, 2026-11-17: "the image is supposed to be a gym query but the bot confuses it as
+    meal. Please fix that"; "the bot should also save chat history for debugging purpose, not
+    just the interpreted set. What if I made a typo"; "fix slow replies"; at the third lat
+    pulldown set "last same set done" got "today's full-body session is done"; "Lying leg curl
+    and shoulder press and cable now missing" got a whole new week ("Home gym, Tue 24 Nov");
+    "it keeps asking me for Lat pulldown when I've already done them"; "if you cannot see [the
+    replies], you should work on adding logs and traces in database".
+  - Already done by hand (chat session, 17 Nov; db backed up to
+    `data/gym.db.bak-17nov-fix`): Lying leg curl set 4 (a copy of set 1) deleted; his own
+    exercise "Plate halo" (10 kg plate, 3 x 10) added to today's session and logged; the
+    weight-plate photo stored as a 0 kcal meal deleted.
+  - Files: `src/gym_coach/router.py`, `app.py`, `store.py`, `meals.py`, `llm.py`,
+    `telegram.py`, `reports.py`, a new `scripts/show_chat.py`, their tests.
+  - Do:
+    (1) Keep the chat for good (Brian wants it for debugging): drop the 30-day prune.
+    (2) A trace per incoming message in `data/gym.db`: the chat row it answers, what the bot
+    understood (intent and the parsed JSON, or "local" when no model call), each model
+    call's seconds, the total seconds to the reply, any error. A trace failure never stops
+    the reply. `scripts/show_chat.py --day YYYY-MM-DD` prints the chat with its traces, so a
+    misread or a typo can be found. Each logged set also gets a save time (a `saved_at` column
+    on `logged_sets`, added to the existing db on start, old rows left empty), which
+    `show_chat.py` prints in time order (Brian approved, 2026-11-17; the rest of the
+    orchestrator's "what each message changed" addition is on hold).
+    (3) A photo is not always a meal. With a caption, the caption is read like a text (the
+    sorting call is told a photo came with it); only a meal intent sends the image to the
+    meal estimate. Without a caption, the image call says meal or not; a non-meal is never
+    stored as a meal and the bot asks what it is.
+    (4) His own exercises: a set for an exercise that is not in today's session and is not a
+    clear match for one (the sorting call says so) is logged under its own name and added to
+    today's session (marked `"own": true`), never relabelled as the shown exercise.
+    (5) A message saying sets are missing or the log is wrong ("X and Y now missing") gets
+    today's log and what is missing, changing nothing; it is never a plan change.
+    (6) No surprise weeks: a chat message never writes or revises a week by itself. A
+    future-week change with a proposed week waiting asks "Revise the proposed week D1 to D2
+    with: <change>? Reply yes." and revises only on yes; while today's strength session is
+    open (approved, not done) it is only kept as a note for `/propose`.
+    (7) A set reported for an exercise other than the one shown: the reply names the
+    exercise logged and its sets, then "Now: <shown exercise>"; the pointer still follows
+    later exercises (Task 14g); the session closes only when no exercise has sets left.
+    (8) Typos: the reply echoes what was logged; a weight over 1.5 times or under half the
+    plan or the last set of that exercise adds "Typo? Reply with the right number."
+    (9) Faster replies: send Telegram's "typing" action on receipt; a plain set report for
+    the shown exercise ("35 12", "35kg 12 12 10") is read locally with no model call; photos
+    are shrunk to at most 1024 px before an image call. Measure receipt-to-reply seconds per
+    message kind before and after, and write them on the board.
+  - Done when: failing tests first for (2) to (8); tests and lint pass; the bot restarted on
+    the new code; one real message checked in the chat and trace tables.
+
 - [ ] **Task 16: live check of meals** needs: Task 13, Task 14 (slot 1 only) (checkpoint) (waiting: inbox, 2026-11-16: bot restarted through the scheduled task at 15:31 on the Task 12-14 code, log clean; Brian sends one real meal photo at a real meal or session, question in docs/inbox.md. Slot 1 never committed this mark; the orchestrator restored it)
   - Done when: Brian sends one real meal photo and gets an estimate and a daily total; the
     month's cost in `/cost` rose by less than US$0.01 for that photo; the card asks Brian

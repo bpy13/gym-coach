@@ -7,6 +7,16 @@
 ## Waiting on Brian
 
 ## Done and carried over
+- Task 14h, Brian's 17 Nov list (traces, photo kinds, own exercises, no surprise weeks,
+  faster replies): code on main 2026-11-17, not ticked; waits on a bot restart and one real
+  message checked in the `chat` and `trace` tables. 227 tests pass (197 before; 33 new in
+  `tests/test_14h.py`, 3 superseded 14g tests removed), ruff clean. Seconds from receipt to
+  reply: before, real, from `data/bot.log` and the `chat` table: photo with caption 14.7 s
+  (one sample; no real text timings exist before the trace). After, with fakes (no network):
+  number-only set report 0.06 s with no model call; set report in words 0.09 s plus its one
+  fast model call; photo 0.06 s plus its image call. After, real: one image call on a made-up
+  1024 px picture took 1.67 s (1,254 input tokens, US$0.00014). Real after-numbers per kind
+  come from the `trace` table once the bot runs the new code.
 - Task 3, Telegram client: done 2026-11-13 (slot 4). 8 tests for it pass, ruff clean.
 - Task 2, record storage (`store.py`): done 2026-11-13 (slot 2). 15 tests and ruff pass.
 - Task 1, project skeleton and environment: done 2026-11-13 (slot 1). Conda env `gym-coach`

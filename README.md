@@ -40,4 +40,12 @@ It answers only the one Telegram account you allow.
   without it the session still goes out as text). Nothing from there is committed. Existing
   plans have no illustrations: ask for a new proposal (`/propose`) to get them. Restart the bot.
 
+- Photos you send: with a caption, the caption is read like a text (a meal caption gets a meal
+  estimate, a question about the machine gets an answer). Without a caption the bot estimates
+  a meal, or asks what it is when it shows no food.
+
+- See a day's chat: `conda run -n gym-coach python scripts\show_chat.py --day 2026-11-17`
+  prints the chat with what the bot understood, its model calls and seconds, and each logged
+  set's save time (read-only on `data\gym.db`).
+
 See `docs/plans/` for the plan.

@@ -30,10 +30,21 @@
   error only, never once Telegram may have the request. The Task 9b "no keep-alive" choice was
   a guess (the real 9b cause was the task's low priority, Task 14e) and is undone.
 - Task 14g (2026-11-17): the bot keeps the chat (both directions, text, delivered or not) in
-  the `chat` table of `data/gym.db` for 30 days, so each model call that reads a message sees
+  the `chat` table of `data/gym.db` (for good since Task 14h; it was 30 days), so each model call that reads a message sees
   today's last 12 lines and today's session. Limits: a reply that never reached Telegram goes
   out "(late)" only with the next send of the same day; a report sent again with the same text
   after an undelivered reply is not logged twice, so two identical real sets in a row while
   Telegram is down need the second one sent again after the "Already logged" reply. A swap
   needs equipment exactly on that day's gym list; the new exercise has no picture until a
   proposal gives it one.
+- Task 14h (2026-11-17): each incoming message gets a row in the `trace` table (what the bot
+  understood, each model call's seconds and reply, seconds to the reply, any error), and each
+  logged set a save time (`saved_at`; sets saved before 14h have none).
+  `scripts\show_chat.py --day YYYY-MM-DD` prints a day in time order. The trace does not yet
+  record what a message changed (sets rewritten, the session pointer); Brian holds that.
+  Limits: a plain "35 12" is read without a model call as a set of the exercise shown, so a
+  set for another exercise needs its name; right after a "Typo?" question a number goes to the
+  model as a possible correction. A photo without a caption that the model calls "not a meal"
+  stores nothing and the bot asks what it is; the image is not kept, so he sends it again with
+  a caption. A future-week change asks "Revise the proposed week ...? Reply yes." only when no
+  strength session is open today; any reply other than yes drops the question.
