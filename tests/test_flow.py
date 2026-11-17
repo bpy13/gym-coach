@@ -38,8 +38,7 @@ def build(store, replies, tg=None):
                     "claude-haiku-5-5", "claude-opus-5-5", now=lambda: NOW, profile_path="examples/profile.md",
                     equipment_path="examples/equipment.md")
     app = App(tg, router, store)
-    sched = Scheduler(store, app.send_to_owner, now=lambda: NOW,
-                      send_exercise=app.send_exercise_to_owner)
+    sched = Scheduler(store, app.send_to_owner, now=lambda: NOW)
     return app, sched, tg
 
 
@@ -55,7 +54,10 @@ def test_whole_session_one_exercise_per_completing_reply(store):
     texts = [t for _, t in tg.sent]
     assert len(texts) == 2 and "Send start" not in texts[0]
     assert texts[0].splitlines()[0] == "Home gym, Tue 17 Nov" and "Row: 2 x 8-12" in texts[0]
-    assert texts[1].startswith("Press: 2 x 8-12")  # first exercise right after the list
+    assert texts[1].startswith("Warm-up")  # the warm-up right after the list (Task 14j)
+
+    say(app, "done", 0)  # warm-up done -> the first exercise arrives
+    assert tg.sent[-1][1].startswith("Press: 2 x 8-12")
 
     say(app, "press 10 10", 1)  # completes Press -> Row arrives
     assert tg.sent[-2][1].startswith("Press: 20 kg x 10, 10")
@@ -70,10 +72,12 @@ def test_whole_session_one_exercise_per_completing_reply(store):
     assert "Skipped Row" in tg.sent[-2][1] and tg.sent[-1][1].startswith("Curl: 2 x 8-12")
 
     n = len(tg.sent)
-    say(app2, "curl 12 12", 4)  # last: summary, no further exercise
+    say(app2, "curl 12 12", 4)  # last: stretching and the Finish button, no further exercise
     assert len(tg.sent) == n + 1
-    assert "Session done" in tg.sent[-1][1] and "Press: 20 kg x 10, 10" in tg.sent[-1][1]
-    say(app2, "next", 5)  # nothing open: not an exercise command (falls to the classifier)
+    assert "Session done" in tg.sent[-1][1] and "Stretch" in tg.sent[-1][1]
+    say(app2, "Finish session", 5)  # the summary
+    assert "Press: 20 kg x 10, 10" in tg.sent[-1][1]
+    say(app2, "next", 6)  # nothing open: not an exercise command (falls to the classifier)
 
 
 def test_next_with_sets_logged_moves_on(store):

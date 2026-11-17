@@ -8,7 +8,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from gym_coach import reports
-from gym_coach.messages import list_message
+from gym_coach.messages import list_message, warm_up_message
 
 log = logging.getLogger(__name__)
 CLOSE_DAY_TIME = "21:00"  # a day with sets logged is marked done (orchestrator, 2026-11-17)
@@ -18,11 +18,9 @@ class Scheduler:
     """`send(text)` delivers a message to Brian. `now()` returns an aware datetime."""
 
     def __init__(self, store, send, session_time: str = "07:00",
-                 timezone: str = "Asia/Hong_Kong", now=None,
-                 send_exercise=None):
+                 timezone: str = "Asia/Hong_Kong", now=None):
         self.store = store
         self.send = send
-        self._send_exercise = send_exercise  # (session, index): exercise message
         self.session_time = session_time
         self._tz = ZoneInfo(timezone)
         self._now = now or (lambda: datetime.now(self._tz))
@@ -62,8 +60,10 @@ class Scheduler:
             return
         self.send(list_message(session))
         if session["kind"] == "strength" and session["exercises"]:
-            if self._send_exercise:  # the first exercise right after the list
-                self._send_exercise(session, 0)
+            # the warm-up right after the list (Task 14j); the router sends the first
+            # exercise when he says it is done or reports a first set
+            self.send(warm_up_message())
+            self.store.set(f"warmup:{day}", "1")
             self.store.set(f"flow:{day}", "0")  # the router shows the next one per reply
         # Marked after the send: a crash in between may repeat a message, never lose one.
         self.store.set(marker, "1")

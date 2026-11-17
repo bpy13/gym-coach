@@ -115,16 +115,15 @@ def test_unreadable_image_becomes_text_only(setup):
     assert [len(i) for _, i in parts[1:3]] == [0, 1]
 
 
-def test_scheduler_sends_list_then_first_exercise(store, setup):
+def test_scheduler_sends_list_then_the_warm_up(store, setup):
+    # Task 14j: the warm-up comes first; the first exercise follows when he says it is done
     _ = setup
     store.add_plan_session("2026-11-17", "home", "strength", "approved", strength()["exercises"])
     sent = []
-    sch = Scheduler(store, lambda t: sent.append(("text", t)),
-                    now=lambda: datetime(2026, 11, 17, 7, 0, tzinfo=HK),
-                    send_exercise=lambda s, i: sent.append(("exercise", s["date"], i)))
+    sch = Scheduler(store, sent.append, now=lambda: datetime(2026, 11, 17, 7, 0, tzinfo=HK))
     sch.tick()
-    assert [e[0] for e in sent] == ["text", "exercise"] and sent[1] == ("exercise", "2026-11-17", 0)
-    assert "start" not in sent[0][1].lower()
+    assert len(sent) == 2 and sent[1].startswith("Warm-up")
+    assert "start" not in sent[0].lower()
     assert store.get("flow:2026-11-17") == "0"
     sch.tick()
     assert len(sent) == 2  # once a day

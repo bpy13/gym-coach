@@ -54,8 +54,10 @@ def test_start_opens_the_workout_and_names_the_exercise(store):
 def test_start_without_the_morning_message_starts_the_flow(store):
     store._run("DELETE FROM kv WHERE key=?", (f"flow:{DAY}",))
     router = build(store, [])[1]
-    router.handle("start")
-    assert store.get(f"flow:{DAY}") == "0" and router.pop_exercise()[1] == 0
+    router.handle("start")  # the warm-up first (Task 14j), then the first exercise
+    assert store.get(f"flow:{DAY}") == "0" and router.pop_exercise() is None
+    router.handle("done")
+    assert router.pop_exercise()[1] == 0
 
 
 def test_a_set_opens_the_workout_by_itself(store):
@@ -109,6 +111,9 @@ def test_closes_when_no_exercise_has_sets_left(store):
     router = build(store, [report("Shoulder", 10)])[1]
     router.handle("start")
     assert "Session done" in router.handle("shoulder 10")
+    # Task 14j: it stays open for stretching until "Finish session"
+    assert workout(store).startswith("open|")
+    router.handle("Finish session")
     assert workout(store).startswith("closed|")
 
 

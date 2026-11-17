@@ -59,3 +59,11 @@
   adds or fixes sets (never deletes) and says what changed, or asks whether he misread. Limits:
   added sets are checked only by exercise name (a name not in today's session or log is
   skipped); a very long workout grows each call (about 1,900 tokens at message 40).
+- Task 14j (2026-11-17): the 07:00 message is the list, then the warm-up (no first exercise);
+  the first exercise follows on "done" (or "next", "skip", "ready", "warm-up done") or a first
+  set report. After the last exercise the bot marks the day done, lists the stretches for the
+  day's exercises (matched by words in the exercise names; an unmatched name gets only the
+  two stretches that always come) and shows a "Finish session" button. The button, "finish"
+  or "end" close the workout, send the summary and remove the button. Limits: the 21:00 close
+  is silent, so the button stays on his phone until his next message that closes; a reply
+  that went out "(late)" loses its button.

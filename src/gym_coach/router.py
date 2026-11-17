@@ -9,7 +9,7 @@ from gym_coach import meals, planner, reports, targets
 from gym_coach.albums import shrink
 from gym_coach.context import DEFAULT_EQUIPMENT, DEFAULT_PROFILE, equipment_for, profile_text
 from gym_coach.llm import HK, CeilingReached, LLMError
-from gym_coach.messages import proposal_message
+from gym_coach.messages import proposal_message, stretch_message, warm_up_message
 
 CLASSIFY_SYSTEM = """You read the new message from Brian, a gym-goer, to his coach bot and classify
 it. You also get the chat (his whole workout's chat while one is open, else today's last lines;
@@ -62,7 +62,12 @@ PENDING_REVISE = "pending:revise"  # a change to the proposed week, waiting for 
 SAME_AGAIN = {"same again", "same", "again", "same as before", "same as last"}
 CHAT_LINES = 12  # today's chat lines each model call sees outside a workout (Task 14g)
 START_WORDS = {"start", "start workout", "start session"}  # open a workout (Task 14i)
-END_WORDS = {"end", "end workout", "end session"}  # close it
+# close it; "finish session" is the button shown after the last exercise (Task 14j)
+END_WORDS = {"end", "end workout", "end session", "finish", "finish session", "finish workout"}
+FINISH_KEYBOARD = {"keyboard": [[{"text": "Finish session"}]], "resize_keyboard": True}
+REMOVE_KEYBOARD = {"remove_keyboard": True}
+WARMUP_KEY = "warmup:"  # + day: "1" while the warm-up is sent and not yet done (Task 14j)
+WARMUP_DONE = {"warm up done", "warmup done", "warm-up done", "ready"}  # besides NEXT_WORDS
 # intents that show a workout has begun: it opens by itself (Task 14i)
 WORKOUT_INTENTS = {"report", "correction", "repeat", "log_check", "change_today"}
 FLOW_KEY = "flow:"  # + day: index of the exercise shown now (kv); absent = not started
@@ -89,6 +94,7 @@ class Router:
         self._equipment_path = equipment_path or DEFAULT_EQUIPMENT
         self.album_session: dict | None = None  # first session of the last proposal
         self.exercise_to_send: tuple[dict, int] | None = None  # (session, index) to show next
+        self.keyboard: dict | None = None  # reply_markup for the reply (Task 14j)
         # for the app's trace of the last message: the sorting call's JSON, or "local" when
         # no model call sorted it; and the error that became a "Sorry" reply, if any
         self.understood: str | None = None
@@ -101,13 +107,13 @@ class Router:
 
     def handle(self, text: str) -> str:
         """Reply text for one message from the allowed user."""
-        self.understood, self.error = "local", None
+        self.understood, self.error, self.keyboard = "local", None, None
         return self._guarded(self._handle, text.strip())
 
     def handle_photo(self, jpeg: bytes, caption: str | None = None) -> str:
         """Reply to a photo. A caption is read like a text (only a meal sends the image to the
         meal estimate); without one, the image call says whether it is a meal at all."""
-        self.understood, self.error = "local", None
+        self.understood, self.error, self.keyboard = "local", None, None
         try:
             jpeg = shrink(jpeg, PHOTO_EDGE)
         except (OSError, ValueError):
@@ -190,7 +196,11 @@ class Router:
             question = str(data.get("question") or "").strip()
             return question or "Sorry, I could not place that. Which exercise do you mean?"
         if intent == "report":
-            return self._report(day, data.get("sets"))
+            warm_up = self._warm_up_over(day)  # a first set ends the warm-up
+            reply = self._report(day, data.get("sets"))
+            if warm_up and self.exercise_to_send is None:
+                self.exercise_to_send = self._shown(day)  # its picture, never sent yet
+            return reply
         if intent == "change_today":
             return self._change_today(day, data.get("today"))
         if intent == "correction":
@@ -421,17 +431,35 @@ class Router:
         if not session or session["kind"] != "strength" or not session["exercises"]:
             return "Workout started. Tell me what you do and I log it."
         if self.store.get(FLOW_KEY + day) is None:  # the morning message never went out
-            return self._move_to(session, day, 0, "Workout started.", show=True)
+            self.store.set(FLOW_KEY + day, "0")
+            self.store.set(WARMUP_KEY + day, "1")
+        if self.store.get(WARMUP_KEY + day) == "1":
+            return "Workout started.\n\n" + warm_up_message()
         shown = self._shown(day)
         if shown is None:
             return "Workout started. Every exercise of today's session is done."
         return f"Workout started. Now: {session['exercises'][shown[1]]['name']}."
 
+    def _warm_up_over(self, day: str) -> bool:
+        """End a pending warm-up; True when one was pending."""
+        if self.store.get(WARMUP_KEY + day) != "1":
+            return False
+        self.store.set(WARMUP_KEY + day, "")
+        return True
+
     def _end(self, day: str) -> str:
+        """"end", "finish" or the "Finish session" button: close and remove the button."""
         session = self.store.plan_session(day)
         if session and session["kind"] == "strength":
             self.store.set(FLOW_KEY + day, str(len(session["exercises"])))  # no more exercises
-        return self._close(day, session, "Workout ended.")
+        self._warm_up_over(day)
+        self.keyboard = REMOVE_KEYBOARD
+        return self._close(day, session, "Workout finished.")
+
+    def pop_keyboard(self) -> dict | None:
+        """The reply keyboard to send with the reply (once)."""
+        keyboard, self.keyboard = self.keyboard, None
+        return keyboard
 
     def _close(self, day: str, session: dict | None, lead: str) -> str:
         """Mark the day done (when sets are logged), close the workout, and send the summary,
@@ -480,6 +508,8 @@ class Router:
             return f"Today's session: {kind} planned.{extra}"
         shown = self._shown(day)
         lines = [f"Today's session ({session['gym']} gym, {session['status']}):"]
+        if self.store.get(WARMUP_KEY + day) == "1":
+            lines.append("- Warm-up: sent, not done yet (the first exercise follows it)")
         names = set()
         for i, ex in enumerate(session["exercises"]):
             name = ex["name"]
@@ -676,6 +706,13 @@ class Router:
         """Handle next / done / skip while a strength session is on; else None."""
         word = text.lower().strip(" .!")
         day = self._today().isoformat()
+        if word in NEXT_WORDS | WARMUP_DONE and self.store.get(WARMUP_KEY + day) == "1":
+            shown = self._shown(day)
+            if shown is not None:  # the warm-up is over: the first exercise follows
+                self._warm_up_over(day)
+                self._open(day)
+                self.exercise_to_send = shown
+                return "Warm-up skipped." if word == "skip" else "Warm-up done."
         shown = self._shown(day) if word in NEXT_WORDS else None
         if shown is None:
             return None
@@ -727,7 +764,13 @@ class Router:
             if show:
                 self.exercise_to_send = (session, nxt)
             return lead
-        return self._close(day, session, f"{lead}\n\nSession done.")
+        # every exercise done: stretching and the "Finish session" button (Task 14j); the
+        # workout stays open until he taps it, says "end", or the 21:00 close
+        reports.mark_done(self.store, day)
+        missing = reports.missing(self.store, day, session)
+        tail = f"\nMissing: {', '.join(missing)}" if missing else ""
+        self.keyboard = FINISH_KEYBOARD
+        return f"{lead}\n\nSession done.{tail}\n\n" + stretch_message(session)
 
     def pop_exercise(self) -> tuple[dict, int] | None:
         """The (session, index) whose exercise message goes out after the reply (once)."""

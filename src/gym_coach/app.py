@@ -104,10 +104,10 @@ class App:
         except Exception:
             log.exception("writing the trace failed")
 
-    def _reply(self, chat_id: int, text: str) -> None:
+    def _reply(self, chat_id: int, text: str, reply_markup: dict | None = None) -> None:
         """Send the reply to his message; the trace keeps the seconds from receipt to it."""
         try:
-            self._text(chat_id, text)
+            self._text(chat_id, text, reply_markup=reply_markup)
         except Exception as exc:
             self._trace["error"] = f"reply not delivered: {exc}"[:300]
             raise
@@ -116,14 +116,18 @@ class App:
             if self._trace["reply_s"] is None:
                 self._trace["reply_s"] = round(time.monotonic() - self._started, 2)
 
-    def _text(self, chat_id: int, text: str, kind: str = "text") -> None:
+    def _text(self, chat_id: int, text: str, kind: str = "text",
+              reply_markup: dict | None = None) -> None:
         """Send and record a text. A text that fails (after the client's own tries) stays
         recorded as not delivered; kind "text" is then sent first, marked (late), by the next
-        send that works today. Raises when the send fails."""
+        send that works today (without its `reply_markup`). Raises when the send fails."""
         with self._send_lock:
             self._send_late(chat_id)
             row = self.store.add_chat(self._stamp(), "out", text, delivered=False, kind=kind)
-            self.telegram.send_message(chat_id, text)
+            if reply_markup is None:
+                self.telegram.send_message(chat_id, text)
+            else:  # the "Finish session" button, or its removal (Task 14j)
+                self.telegram.send_message(chat_id, text, reply_markup=reply_markup)
             self.store.set_chat_delivered(row)
             self._count[0] += 1
 
@@ -173,7 +177,8 @@ class App:
                 reply = self.router.handle_photo(jpeg, incoming.caption)
             finally:
                 self._record_in(received, ("[photo] " + (incoming.caption or "")).strip())
-            self._reply(incoming.chat_id, reply)
+            pop_keyboard = getattr(self.router, "pop_keyboard", None)
+            self._reply(incoming.chat_id, reply, pop_keyboard() if pop_keyboard else None)
             return
         text = (incoming.text or "").strip()
         if not text:
@@ -193,8 +198,9 @@ class App:
             except Exception:
                 log.exception("sending the proposal's pictures failed")
         shown = self.router.pop_exercise()  # taken before the send, so a failure keeps no state
+        pop_keyboard = getattr(self.router, "pop_keyboard", None)
         try:
-            self._reply(incoming.chat_id, reply)
+            self._reply(incoming.chat_id, reply, pop_keyboard() if pop_keyboard else None)
         except Exception:
             log.exception("sending the reply failed")  # the exercise below still goes out
         if shown is not None:
@@ -245,11 +251,6 @@ class App:
             except Exception:
                 log.exception("sending a message part failed; going on")
 
-    def send_exercise_to_owner(self, session: dict, index: int) -> None:
-        chat = self.chat_id or int(self.store.get("chat_id") or 0)
-        if chat:
-            self.send_exercise(chat, session, index)
-
     def send_to_owner(self, text: str) -> None:
         chat = self.chat_id or int(self.store.get("chat_id") or 0)
         if chat:  # the scheduler retries a failed one itself, so it is not sent late
@@ -297,8 +298,7 @@ def build(config: Config) -> tuple[App, Scheduler, Store]:
                               illustrations=illustrations, show_tip=config.show_form_tip)
 
     app = App(telegram, router, store, parts_for=parts_for, exercise_for=exercise_for)
-    scheduler = Scheduler(store, app.send_to_owner, config.session_time, config.timezone,
-                          send_exercise=app.send_exercise_to_owner)
+    scheduler = Scheduler(store, app.send_to_owner, config.session_time, config.timezone)
     return app, scheduler, store
 
 

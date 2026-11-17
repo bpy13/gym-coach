@@ -8,6 +8,7 @@ class FakeTelegram:
         self.incoming = list(incoming or [])
         self.files = dict(files or {})
         self.sent: list[tuple[int, str]] = []
+        self.markups: list = []  # each text's reply_markup (None for a plain one)
         self.albums: list[tuple[int, list]] = []
         self.pictures: list[tuple[int, list, str]] = []
 
@@ -15,8 +16,9 @@ class FakeTelegram:
         out, self.incoming = self.incoming, []
         return out
 
-    def send_message(self, chat_id, text):
+    def send_message(self, chat_id, text, reply_markup=None):
         self.sent.append((chat_id, text))
+        self.markups.append(reply_markup)
 
     def send_chat_action(self, chat_id, action="typing"):
         pass

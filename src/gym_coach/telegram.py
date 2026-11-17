@@ -170,9 +170,14 @@ class TelegramClient:
             )
         return out
 
-    def send_message(self, chat_id: int, text: str) -> None:
-        for chunk in split_text(text):
-            self._call("sendMessage", {"chat_id": chat_id, "text": chunk})
+    def send_message(self, chat_id: int, text: str, reply_markup: dict | None = None) -> None:
+        """`reply_markup`: a reply keyboard to show (or remove), sent with the last chunk."""
+        chunks = split_text(text)
+        for i, chunk in enumerate(chunks):
+            payload = {"chat_id": chat_id, "text": chunk}
+            if reply_markup is not None and i == len(chunks) - 1:
+                payload["reply_markup"] = reply_markup
+            self._call("sendMessage", payload)
 
     def send_chat_action(self, chat_id: int, action: str = "typing") -> None:
         """Show "typing..." in his chat (about 5 s, or until the next message). One try."""

@@ -624,6 +624,24 @@ still wait for Task 11.
   - Done when: failing tests first; tests and lint pass; the bot restarted; the next real
     workout checked in the chat and trace tables.
 
+- [ ] **Task 14j: warm-up first, stretching last, a button to finish** (opus) needs: Task 14i (same files)
+  - Brian, 2026-11-17: "at the end of the session, the bot should remind me to do stretching,
+    and when I am done there should be a simple way to close the gym session"; "I find that I
+    am not sweating enough during the last gym session. Please include warm up exercises such
+    as bear walk to enable warmup fully".
+  - Do: (1) Every strength session starts with a warm-up, sent right after the day's list and
+    before the first exercise: a fixed routine of about 8 minutes that needs no equipment
+    (bear crawl, jumping jacks, high knees, arm circles, bodyweight squats; times or reps
+    each), kept in one list in the code so it is easy to change. Its sets are not logged; the
+    first exercise follows when he says he is done with it (or reports a first set).
+    (2) When the last exercise is done, the bot reminds him to stretch (a short list of
+    about 5 minutes for the muscles of the day) and shows a Telegram reply-keyboard button
+    "Finish session". The button sends a normal text; the bot then closes the workout (Task
+    14i's close), sends the summary, and removes the button. Typing "finish" or "end" works
+    the same. The 21:00 close still closes a workout he never finished.
+  - Done when: failing tests first; tests and lint pass; the bot restarted; the next real
+    workout checked in the chat and trace tables.
+
 - [ ] **Task 16: live check of meals** needs: Task 13, Task 14 (slot 1 only) (checkpoint) (waiting: inbox, 2026-11-16: bot restarted through the scheduled task at 15:31 on the Task 12-14 code, log clean; Brian sends one real meal photo at a real meal or session, question in docs/inbox.md. Slot 1 never committed this mark; the orchestrator restored it)
   - Done when: Brian sends one real meal photo and gets an estimate and a daily total; the
     month's cost in `/cost` rose by less than US$0.01 for that photo; the card asks Brian

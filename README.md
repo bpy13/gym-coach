@@ -45,9 +45,12 @@ It answers only the one Telegram account you allow.
   a meal, or asks what it is when it shows no food. During a workout a photo is never a meal:
   it is answered as a question about the workout.
 
-- Workouts: send "start" when you begin (the first set or a question about today's exercises
-  also starts it) and "end" when you stop; it also ends when every exercise is done or at
-  21:00. While it runs, the bot reads each message with the whole workout's chat in view. If
+- Workouts: the morning message lists the exercises, then a warm-up of about 8 minutes (edit
+  `WARM_UP` in `src/gym_coach/messages.py` to change it); say "done" after it and the first
+  exercise follows. Send "start" when you begin (the first set or a question about today's
+  exercises also starts it). After the last exercise the bot lists stretches and shows a
+  "Finish session" button; tap it (or send "finish" or "end") for the summary. A workout you
+  never finish closes at 21:00. While it runs, the bot reads each message with the whole workout's chat in view. If
   you say sets are missing ("leg curl and row now missing"), the bot checks the chat: it saves
   or fixes the sets you reported and says what it changed, or shows the log and asks whether
   you misread. A change to next week is kept until this week's last session is done; then the

@@ -46,7 +46,7 @@ def test_sends_once_at_seven_naming_gym_and_exercises(store):
     sch.tick()
     clock.t = clock.t.replace(hour=7, minute=1)
     sch.tick()
-    assert len(sent) == 1
+    assert len(sent) == 2 and sent[1].startswith("Warm-up")  # the list, then the warm-up
     assert sent[0].splitlines()[0] == "Home gym, Tue 17 Nov"
     assert "Chest press machine: 3 x 8-12 at 30 kg" in sent[0]
     assert "Lat pulldown: 3 x 8-12 at 40 kg" in sent[0]
@@ -57,7 +57,7 @@ def test_start_at_3pm_same_day_sends_once(store):
     sch, sent = make(store, Clock(2026, 11, 17, 15, 0))
     sch.tick()
     sch.tick()
-    assert len(sent) == 1
+    assert len(sent) == 2  # the list and the warm-up, once
 
 
 def test_next_day_does_not_send_yesterdays(store):
@@ -123,6 +123,6 @@ def test_tick_in_second_thread_sends_session(tmp_path):
         t.start()
         t.join()
         assert errors == []
-        assert len(sent) == 1
+        assert len(sent) == 2  # the list and the warm-up
     finally:
         store.close()

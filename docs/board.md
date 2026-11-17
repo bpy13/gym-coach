@@ -7,6 +7,12 @@
 ## Waiting on Brian
 
 ## Done and carried over
+- Task 14j, warm-up first, stretching last, a "Finish session" button (`messages.py`
+  `WARM_UP` and `STRETCHES`, `scheduler.py`, `router.py`, `app.py`, `telegram.py`
+  `reply_markup`): code on main 2026-11-17, not ticked; waits on a bot restart and the next
+  real workout checked in the `chat` and `trace` tables. 263 tests pass (250 before; 13 new
+  in `tests/test_14j.py`; 7 older tests now expect the warm-up and the button), ruff clean.
+  No model call added. Paid calls: none.
 - Task 14i, the whole workout in view (`router.py`, `app.py`, `store.py`, `reports.py`,
   `scheduler.py`, `scripts/show_chat.py`): code on main 2026-11-17, not ticked; waits on a bot
   restart and the next real workout checked in the `chat` and `trace` tables. 250 tests pass
