@@ -195,7 +195,7 @@ Two causes sit under the swap loop besides the design:
     `data/bot.log` shows the start and a getUpdates poll with no traceback; one `/today`
     from Brian gets an answer. Docs describe the tools and the limits found in the replay.
 
-- [ ] **Task 15f: end-of-run review** (opus) needs: Task 15e
+- [x] **Task 15f: end-of-run review** (opus) (ran before 15e; 8 findings fixed in e451e6d..0403fff)
   - Files: none (pre-release-reviewer on this run's commit range).
   - Done when: findings are fixed or recorded in `docs/open-items.md`; full tests and ruff
     pass.
