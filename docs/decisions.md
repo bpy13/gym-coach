@@ -135,3 +135,12 @@ setting or a small change.
 - 2026-11-17, Brian: the bot reads each message with the earlier messages of the session in view and copes with a message or reply that went missing (plan Task 14g). Keeping the chat text in `data/gym.db` for 30 days to do this is the orchestrator's call; Brian may change it. (Brian, 2026-11-17: "It seems to me the Telegram bot has no context and cannot read previous messages, please fix that because if missed message it messes everything without the capability to handle session messages")
 - 2026-11-17, orchestrator (Brian may change it): a strength day is marked `done` when its session flow closes ("Session done"), or silently at 21:00 when sets are logged but the flow never closed; no longer at the first logged set (plan Task 14g).
 - 2026-11-17, slot 1 (builder's default, Brian may change it): while a session is on, a request to change an exercise changes today's session only (swap, drop or new weight; logged sets kept). A change to a future week revises a proposed week that is waiting; with none waiting it is kept as a note for the next `/propose` and no week is written (plan Task 14g).
+- 2026-11-23, Brian: talking to the bot must feel like talking to a real gym instructor. The
+  model leads the chat with tools that change the records; code still enforces the hard rules
+  inside the tools; the label-sorting call and its fixed replies go (plan
+  `docs/plans/2026-11-23-coach-chat.md`, Task 15). (Brian, 2026-11-23: "we're doing this
+  rule-based? no wonder the bot feels so dumb to speak to. Can we change that?", then "I need
+  speaking to the bot feels like speaking to real gym instructor", then "Go")
+- 2026-11-23, Brian: the parents' combined machine is a seated leg extension with a lying leg
+  curl, not a seated leg curl (Task 15a). (Brian, 22 Nov chat: "it is a lying leg curl / seated
+  leg extension, which you have mistakenly identified as seated leg curl")
