@@ -1,11 +1,14 @@
 """Task 15f: fixes from the end-of-run review of Task 15 (the coach chat). Made-up data."""
 
+import copy
+
 import pytest
 
 from fakes import tool_use
+from gym_coach import reports
 from gym_coach.llm import MAX_TOOL_ROUNDS
 from gym_coach.store import Store
-from test_coach import DAY, EQUIPMENT, EXS, SUN, log, make, saved
+from test_coach import DAY, EQUIPMENT, EXS, SUN, log, make, results, saved
 
 
 @pytest.fixture
@@ -76,4 +79,63 @@ def test_a_card_left_from_an_earlier_message_is_not_sent_with_the_next_reply(sto
     assert router.pop_exercise() is None
     router.exercise_to_send = (store.plan_session(DAY), 2)
     router.handle_photo(b"not a jpeg", "what is this")
+    assert router.pop_exercise() is None
+
+
+# finding 2 and 8: swap and drop never fail after a write; the flow pointer follows
+
+def _swap(name, new="DB fly", gear="Dumbbells on a rack", **extra):
+    return tool_use("swap_exercise", {"exercise": name, "new_exercise": new,
+                                      "equipment": gear, **extra})
+
+
+def test_swap_of_an_exercise_without_a_planned_weight_saves_once_and_moves_on(tmp_path,
+                                                                              equipment):
+    s = Store(tmp_path / "b.db")
+    exs = copy.deepcopy(EXS)
+    exs[1]["weight_kg"] = None
+    s.add_plan_session(DAY, "parents", "strength", "approved", exs)
+    s.set(f"flow:{DAY}", "1")
+    router, fake = make(s, equipment, [[_swap("Rear delt fly")], "Swapped."])
+    router.handle("swap the rear delt")
+    [res] = results(fake.calls[1])
+    assert not res.get("is_error") and "light weight" in res["content"]
+    assert [e["name"] for e in s.plan_session(DAY)["exercises"]] == [
+        "Low row", "DB fly", "Seated leg curl", "Chest press"]
+    assert s.get(f"flow:{DAY}") == "1" and router.pop_exercise()[1] == 1
+    s.close()
+
+
+def test_swap_after_sets_were_done_keeps_them_and_shows_the_new_exercise(store, equipment):
+    store.set(f"flow:{DAY}", "1")
+    reports.log_report(store, DAY, [{"exercise": "Rear delt fly", "weight_kg": 30,
+                                     "reps": 10}] * 2)
+    router, _ = make(store, equipment, [[_swap("Rear delt fly", weight_kg=8)], "Swapped."])
+    router.handle("machine is taken, dumbbells for the last one")
+    exs = store.plan_session(DAY)["exercises"]
+    assert [e["name"] for e in exs] == ["Low row", "Rear delt fly", "DB fly",
+                                        "Seated leg curl", "Chest press"]
+    assert exs[1]["sets"] == 2 and exs[2]["sets"] == 1 and exs[2]["weight_kg"] == 8
+    assert store.get(f"flow:{DAY}") == "2" and router.pop_exercise()[1] == 2
+    assert [r["exercise"] for r in store.logged_sets(DAY)] == ["Rear delt fly"] * 2
+
+
+def test_drop_before_the_shown_exercise_keeps_the_pointer_on_it(store, equipment):
+    store.set(f"flow:{DAY}", "3")  # chest press shown
+    router, _ = make(store, equipment, [[tool_use("drop_exercise",
+                                                  {"exercise": "Rear delt fly"})], "Dropped."])
+    router.handle("drop the rear delt today")
+    exs = store.plan_session(DAY)["exercises"]
+    assert store.get(f"flow:{DAY}") == "2" and exs[2]["name"] == "Chest press"
+    assert router.pop_exercise() is None
+
+
+def test_swap_with_sets_before_the_shown_exercise_keeps_the_pointer_on_it(store, equipment):
+    store.set(f"flow:{DAY}", "3")  # chest press shown; the swap adds an exercise before it
+    reports.log_report(store, DAY, [{"exercise": "Rear delt fly", "weight_kg": 30,
+                                     "reps": 10}])
+    router, _ = make(store, equipment, [[_swap("Rear delt fly")], "Swapped."])
+    router.handle("do the rest of the rear delts with dumbbells later")
+    exs = store.plan_session(DAY)["exercises"]
+    assert store.get(f"flow:{DAY}") == "4" and exs[4]["name"] == "Chest press"
     assert router.pop_exercise() is None

@@ -11,7 +11,7 @@ from gym_coach.albums import shrink
 from gym_coach.coach import Coach, ToolRefused
 from gym_coach.context import DEFAULT_EQUIPMENT, DEFAULT_PROFILE, equipment_for
 from gym_coach.llm import HK, CeilingReached, LLMError
-from gym_coach.messages import proposal_message, stretch_message, warm_up_message
+from gym_coach.messages import proposal_message, stretch_message, warm_up_message, weight_text
 
 PENDING_CHANGE = "pending:plan_change"  # a future-week change kept for the next /propose
 CHAT_LINES = 12  # today's chat lines each model call sees outside a workout (Task 14g)
@@ -239,14 +239,16 @@ class Router:
         new = {"name": name, "equipment": gear, "sets": max(1, int(ex["sets"]) - done),
                "rep_low": ex["rep_low"], "rep_high": ex["rep_high"],
                "weight_kg": weight if weight is not None else ex["weight_kg"]}
+        # the text is built before the save, so the tool never fails after the write (a
+        # failure goes back to the model, which would swap again; Task 15f)
+        lead = (f"Swapped {ex['name']} for {name} on {gear} today: {new['sets']} x "
+                f"{new['rep_low']}-{new['rep_high']} at {weight_text(new['weight_kg'])}.")
         if done:
             ex["sets"] = done
             session["exercises"].insert(index + 1, new)
         else:
             session["exercises"][index] = new
         self._save(session)
-        lead = (f"Swapped {ex['name']} for {name} on {gear} today: {new['sets']} x "
-                f"{new['rep_low']}-{new['rep_high']} at {new['weight_kg']:g} kg.")
         return self._after_change(session, day, index, done, 1 if done else 0, lead)
 
     def _drop(self, session: dict, index: int, day: str) -> str:

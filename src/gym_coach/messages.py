@@ -47,7 +47,8 @@ def stretch_message(session: dict) -> str:
             + "\nTap \"Finish session\" when you are done.")
 
 
-def _weight(kg) -> str:
+def weight_text(kg) -> str:
+    """A weight as "35 kg", or "light weight" when the plan has no number."""
     return f"{kg:g} kg" if isinstance(kg, (int, float)) else "light weight"
 
 
@@ -57,7 +58,7 @@ def head(session: dict) -> str:
 
 
 def exercise_line(e: dict) -> str:
-    return f"{e['name']}: {e['sets']} x {e['rep_low']}-{e['rep_high']} at {_weight(e.get('weight_kg'))}"
+    return f"{e['name']}: {e['sets']} x {e['rep_low']}-{e['rep_high']} at {weight_text(e.get('weight_kg'))}"
 
 
 def _lines(session: dict) -> list[str]:
