@@ -125,6 +125,13 @@ def _positive_int(value, field: str) -> int:
     return int(number)
 
 
+def _changed(result: str) -> bool:
+    """False for a tool result that says nothing was saved or changed."""
+    low = result.lower()
+    return not (low.startswith(("not saved", "no change")) or "nothing changed" in low
+                or "; nothing logged" in low)
+
+
 def _optional(data: dict, field: str) -> float | None:
     return None if data.get(field) is None else _positive(data[field], field)
 
@@ -139,6 +146,9 @@ class Coach:
         self.caption = caption
         self.calls: list[dict] = []  # {tool, input, result[:200]} for the trace
         self.last_result = ""  # the last tool result without its queue notes
+        # results of the tools that changed something: the reply when the model call fails
+        # after them (Task 15f)
+        self.done: list[str] = []
         # what was queued before this message, so show_exercise "next" can tell whether an
         # earlier tool in this message already moved on
         self._card_at_start, self._tail_at_start = router.exercise_to_send, len(router.tail)
@@ -178,6 +188,8 @@ class Coach:
             self.calls.append({"tool": name, "input": data, "result": f"{kind}: {exc}"[:200]})
             raise
         self.last_result = result
+        if _changed(result):
+            self.done.append(result)
         self.calls.append({"tool": name, "input": data, "result": result[:200]})
         notes = []
         if r.exercise_to_send is not None and r.exercise_to_send is not card:

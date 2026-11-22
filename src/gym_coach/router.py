@@ -58,13 +58,13 @@ class Router:
 
     def handle(self, text: str) -> str:
         """Reply text for one message from the allowed user."""
-        self.understood, self.error, self.keyboard, self.tail = "local", None, None, []
+        self._reset()
         return self._guarded(self._handle, text.strip())
 
     def handle_photo(self, jpeg: bytes, caption: str | None = None) -> str:
         """Reply to a photo. In an open workout, or with a caption, the coach call gets the
         image and decides; outside a workout a photo without a caption is a meal estimate."""
-        self.understood, self.error, self.keyboard, self.tail = "local", None, None, []
+        self._reset()
         try:
             jpeg = shrink(jpeg, PHOTO_EDGE)
         except (OSError, ValueError):
@@ -79,16 +79,27 @@ class Router:
         self.understood = "photo without caption: meal estimate"
         return self._guarded(self._meal, None, jpeg)
 
+    def _reset(self) -> None:
+        """Nothing from an earlier message (a card it queued, say) goes out with this one."""
+        self.understood, self.error, self.keyboard, self.tail = "local", None, None, []
+        self.exercise_to_send = None
+
     def _guarded(self, fn, *args) -> str:
         try:
             return fn(*args)
         except CeilingReached:
             self.error = "monthly ceiling reached"
-            return (f"This month's US${self.claude.ceiling_usd:g} limit on AI calls is reached. "
-                    "I can't read new messages until next month; /today and /cost still work.")
+            return self._ceiling_text()
         except (LLMError, planner.PlanError) as exc:
             self.error = f"{type(exc).__name__}: {exc}"
             return f"Sorry, I could not do that ({exc}). Please try again."
+        except Exception as exc:  # noqa: BLE001 - an SDK or network failure of a model call
+            self.error = f"{type(exc).__name__}: {exc}"[:300]
+            return "Sorry, I could not reach the coach just now. Please try again."
+
+    def _ceiling_text(self) -> str:
+        return (f"This month's US${self.claude.ceiling_usd:g} limit on AI calls is reached. "
+                "I can't read new messages until next month; /today and /cost still work.")
 
     def _today(self) -> date:
         return self._now().astimezone(HK).date()
@@ -124,6 +135,18 @@ class Router:
         coach = Coach(self, day, jpeg, caption)
         try:
             reply = coach.reply(text).strip()
+        except Exception as exc:
+            if not coach.done:
+                raise  # nothing changed: _guarded says sorry, and sending it again is safe
+            # a tool already changed the records: say what changed, never "try again"
+            # (sending the message again would log it twice)
+            if isinstance(exc, CeilingReached):
+                self.error, why = "monthly ceiling reached", self._ceiling_text()
+            else:
+                self.error = f"{type(exc).__name__}: {exc}"[:300]
+                why = "My full reply did not come through."
+            reply = (f"{why} This is saved, no need to send it again:\n"
+                     + "\n".join(dict.fromkeys(coach.done)))
         finally:
             self.understood = json.dumps(coach.calls, ensure_ascii=False)
         reply = reply or coach.last_result or "Sorry, I have no answer to that."

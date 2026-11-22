@@ -51,6 +51,7 @@ class FakeClaude:
     Each reply is a string (one text block) or a list of blocks, where a string is a text
     block and `tool_use(name, input)` is a tool call, e.g.
     `FakeClaude([[tool_use("log_sets", {...})], "Logged."])` scripts one tool round, then text.
+    An exception instance as a reply is raised by that call.
     """
 
     def __init__(self, replies=(), input_tokens=1000, output_tokens=200):
@@ -65,6 +66,8 @@ class FakeClaude:
 
         self.calls.append(kwargs)
         reply = self.replies.pop(0) if self.replies else "ok"
+        if isinstance(reply, BaseException):  # an SDK or network failure for this call
+            raise reply
         blocks = reply if isinstance(reply, list) else [reply]
         content = [NS(type="text", text=b) if isinstance(b, str) else b for b in blocks]
         return NS(
