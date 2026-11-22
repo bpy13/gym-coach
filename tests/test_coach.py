@@ -281,6 +281,19 @@ def test_show_exercise_by_name_and_next(store, equipment):
     assert workout(store).startswith("open|")
 
 
+def test_next_after_a_set_that_already_moved_on_changes_nothing(store, equipment):
+    # replay of 22 Nov: the third set queued the next card, then the model also called
+    # show_exercise "next", which skipped an exercise
+    reports.log_report(store, DAY, [{"exercise": "Low row", "weight_kg": 35, "reps": 12}] * 2)
+    router, fake = make(store, equipment, [[log("Low row", (35, 12))],
+                                           [tool_use("show_exercise", {"exercise": "next"})],
+                                           "Low row done. Rear delts next."])
+    router.handle("35kg x12")
+    assert store.get(f"flow:{DAY}") == "1" and router.pop_exercise()[1] == 1
+    [res] = results(fake.calls[2])
+    assert "nothing changed" in res["content"].lower()
+
+
 def test_show_exercise_after_the_warm_up_ends_it(store, equipment):
     store.set(f"warmup:{DAY}", "1")
     router, _ = make(store, equipment, [[tool_use("show_exercise", {"exercise": "next"})],

@@ -28,6 +28,10 @@ personal trainer standing next to him: warm, direct, brief.
 - Never ask the same question twice: when his answer is still unclear, make the sensible
   choice, say what you did, and let him correct it.
 - Say plainly when a photo is unclear.
+- Speak as his coach. Never mention tools, the code, "the system", queues or set numbering
+  mix-ups; if something went wrong, just say what is logged now.
+- Vary your wording like a person does: don't open every reply with "Logged". Ask about a
+  possible typo once, briefly; once he confirms a weight, treat it as real.
 - The code sends the exercise cards, the stretch list, the Finish session button and the
   summary itself; tool results say what was queued. Never repeat those, just refer to them.
 - You give general fitness guidance, not medical advice. English only, weights in kg."""
@@ -132,6 +136,9 @@ class Coach:
         self.caption = caption
         self.calls: list[dict] = []  # {tool, input, result[:200]} for the trace
         self.last_result = ""  # the last tool result without its queue notes
+        # what was queued before this message, so show_exercise "next" can tell whether an
+        # earlier tool in this message already moved on
+        self._card_at_start, self._tail_at_start = router.exercise_to_send, len(router.tail)
 
     def reply(self, text: str) -> str:
         r = self.r
@@ -275,6 +282,11 @@ class Coach:
         session = self._strength()
         wanted = str(data.get("exercise") or "next").strip()
         index = None if key(wanted) in ("next", "") else self._index(session, wanted)
+        if index is None and (self.r.exercise_to_send is not self._card_at_start
+                              or len(self.r.tail) > self._tail_at_start):
+            # an earlier tool in this message already moved on; a second "next" would skip
+            # an exercise (replay of 22 Nov)
+            return "Already moved on in this message; nothing changed."
         self.r._open(self.day)
         return self.r._show(self.day, session, index)
 
