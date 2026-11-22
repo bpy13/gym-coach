@@ -8,7 +8,7 @@ from datetime import date, datetime, timedelta
 
 from gym_coach import meals, planner, reports, targets
 from gym_coach.albums import shrink
-from gym_coach.coach import Coach, ToolRefused
+from gym_coach.coach import FLOW_KEY, Coach, ToolRefused
 from gym_coach.context import DEFAULT_EQUIPMENT, DEFAULT_PROFILE, equipment_for
 from gym_coach.llm import HK, CeilingReached, LLMError
 from gym_coach.messages import proposal_message, stretch_message, warm_up_message, weight_text
@@ -20,7 +20,6 @@ FINISH_BUTTON = "finish session"  # the button shown after the last exercise (Ta
 FINISH_KEYBOARD = {"keyboard": [[{"text": "Finish session"}]], "resize_keyboard": True}
 REMOVE_KEYBOARD = {"remove_keyboard": True}
 WARMUP_KEY = "warmup:"  # + day: "1" while the warm-up is sent and not yet done (Task 14j)
-FLOW_KEY = "flow:"  # + day: index of the exercise shown now (kv); absent = not started
 PASSED_KEY = "passed:"  # + day: exercises he moved on from with "next", "|"-joined
 PHOTO_EDGE = 1024  # px; his photos are shrunk to this before an image call (Task 14h)
 TYPO_HIGH, TYPO_LOW = 1.5, 0.5  # a weight outside these times the plan or last set: "far"

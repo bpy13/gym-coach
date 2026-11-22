@@ -10,6 +10,8 @@ from gym_coach import meals, reports, targets
 from gym_coach.context import DEFAULT_PROFILE, profile_text
 from gym_coach.llm import HK
 
+FLOW_KEY = "flow:"  # + day: index of the exercise shown now (kv); absent = not started
+
 SYSTEM = """You are Brian's personal gym coach, chatting with him on Telegram. Talk like a good
 personal trainer standing next to him: warm, direct, brief.
 - During sets reply in 1-3 short sentences that react to what he just did and say what comes
@@ -149,9 +151,12 @@ class Coach:
         # results of the tools that changed something: the reply when the model call fails
         # after them (Task 15f)
         self.done: list[str] = []
-        # what was queued before this message, so show_exercise "next" can tell whether an
-        # earlier tool in this message already moved on
-        self._card_at_start, self._tail_at_start = router.exercise_to_send, len(router.tail)
+        # the flow pointer and the queued texts at the start, so show_exercise "next" can tell
+        # whether an earlier tool in this message already moved on (Task 15f: not the queued
+        # card, which a first set that ends the warm-up queues without moving on)
+        self._flow_at_start = router.store.get(FLOW_KEY + day)
+        self._tail_at_start = len(router.tail)
+        self._shown_here = False  # a show_exercise in this message already showed one
 
     def reply(self, text: str) -> str:
         r = self.r
@@ -297,13 +302,16 @@ class Coach:
         session = self._strength()
         wanted = str(data.get("exercise") or "next").strip()
         index = None if key(wanted) in ("next", "") else self._index(session, wanted)
-        if index is None and (self.r.exercise_to_send is not self._card_at_start
-                              or len(self.r.tail) > self._tail_at_start):
+        moved = (self._shown_here or len(self.r.tail) > self._tail_at_start
+                 or self.r.store.get(FLOW_KEY + self.day) != self._flow_at_start)
+        if index is None and moved:
             # an earlier tool in this message already moved on; a second "next" would skip
             # an exercise (replay of 22 Nov)
             return "Already moved on in this message; nothing changed."
         self.r._open(self.day)
-        return self.r._show(self.day, session, index)
+        result = self.r._show(self.day, session, index)
+        self._shown_here = True
+        return result
 
     def t_swap_exercise(self, data: dict) -> str:
         r = self.r

@@ -139,3 +139,27 @@ def test_swap_with_sets_before_the_shown_exercise_keeps_the_pointer_on_it(store,
     exs = store.plan_session(DAY)["exercises"]
     assert store.get(f"flow:{DAY}") == "4" and exs[4]["name"] == "Chest press"
     assert router.pop_exercise() is None
+
+
+# finding 5: "next" after a first set that ended the warm-up
+
+def test_next_after_a_first_set_that_ended_the_warm_up_moves_on(store, equipment):
+    store.set(f"warmup:{DAY}", "1")
+    router, fake = make(store, equipment, [[log("Low row", (35, 12))],
+                                           [tool_use("show_exercise", {"exercise": "next"})],
+                                           "Rear delts next."])
+    router.handle("warm-up done, low row 35x12, that's enough, next")
+    [res] = results(fake.calls[2])
+    assert "nothing changed" not in res["content"].lower()
+    assert store.get(f"flow:{DAY}") == "1" and router.pop_exercise()[1] == 1
+
+
+def test_a_second_next_after_the_warm_up_ended_changes_nothing(store, equipment):
+    store.set(f"warmup:{DAY}", "1")
+    nxt = {"exercise": "next"}
+    router, fake = make(store, equipment, [[tool_use("show_exercise", nxt)],
+                                           [tool_use("show_exercise", nxt)], "Low row first."])
+    router.handle("done")
+    [res] = results(fake.calls[2])
+    assert "nothing changed" in res["content"].lower()
+    assert store.get(f"flow:{DAY}") == "0" and router.pop_exercise()[1] == 0
