@@ -6,7 +6,7 @@ Copies the database to <db>.bak-15a first (once; an existing copy is kept), then
 exercise replaces the equipment `lat pulldown with low row (one tower` with the full name and
 `leg extension and leg curl` with `leg extension (seated) and lying leg curl`. An exercise on
 that machine whose name says "leg curl" becomes "Lying leg curl" with illustration
-`Lying_Leg_Curls`, but only on days from today on: past days keep their exercise names
+`Lying_Leg_Curls`, but only on days after today: today and past days keep their names
 (logged sets point at them). Safe to run twice: the second run changes nothing.
 """
 
@@ -48,7 +48,7 @@ def migrate(db: Path, today: str) -> list[str]:
                     ex["equipment"] = new_equipment
                     touched = True
                     changes.append(f"{day}: {ex['name']}: equipment -> {new_equipment}")
-                if (new_equipment == NEW_COMBINED and day >= today
+                if (new_equipment == NEW_COMBINED and day > today
                         and "leg curl" in ex["name"].lower()
                         and (ex["name"], ex.get("illustration")) != ("Lying leg curl", "Lying_Leg_Curls")):
                     changes.append(f"{day}: {ex['name']} -> Lying leg curl (Lying_Leg_Curls)")

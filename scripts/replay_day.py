@@ -2,14 +2,17 @@
 
     python scripts/replay_day.py --day 2026-11-22 [--db PATH] [--from N --to M]
                                  [--old-machine] [--append] [--out FILE] [--max-cost 0.50]
+                                 [--work-dir DIR]
 
-It copies the database into the session scratchpad (the original is only read), resets the
-day in the copy (sets, kv keys, that day's chat and trace rows, the session as sent at 07:00),
+It copies the database into --work-dir (default: gym-coach-replay in the system temp folder;
+the original is only read), resets the day in the copy (sets, kv keys, that day's chat and trace rows, the session as sent at 07:00),
 feeds Brian's messages from the chat table in order with the clock at each message's time, and
 writes every message, the tool calls, the reply, any exercise card or keyboard and the cost of
 each message to data/replay/<day>.txt. Real model calls: the cost is added up and the run
-stops when it passes --max-cost. Photos are not kept, so a "[photo]" message goes through as
-the text it was stored as.
+stops when it passes --max-cost. Those calls are recorded in the copy only, so the bot's
+monthly ceiling never sees them: before the run the script reads this month's cost from the
+source database and refuses when that plus --max-cost is over the ceiling in the config.
+Photos are not kept, so a "[photo]" message goes through as the text it was stored as.
 
 With --from (and --seed for sets that were corrected later in the stored rows), the chat rows before that message, the sets saved before it and the workout and
 flow state of that moment are copied from the source first, so the replay starts mid-workout.
@@ -24,6 +27,7 @@ import shutil
 import sqlite3
 import statistics
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -34,13 +38,12 @@ from gym_coach import reports
 from gym_coach.albums import exercise_parts
 from gym_coach.config import load_config
 from gym_coach.illustrations import Illustrations
-from gym_coach.llm import Claude, LazyAnthropic
+from gym_coach.llm import HK, Claude, LazyAnthropic, _month_bounds
 from gym_coach.messages import exercise_line
 from gym_coach.router import Router
 from gym_coach.store import Store
 
-SCRATCH = Path(r"C:\Users\brian\AppData\Local\Temp\claude\5232f752eced1b02"
-               r"\7241a68d-2ade-4a53-8b20-90864a1963b8\scratchpad\replay")
+WORK_DIR = Path(tempfile.gettempdir()) / "gym-coach-replay"
 LINE = re.compile(r"^(?P<name>.+): (?P<sets>\d+) x (?P<lo>\d+)-(?P<hi>\d+) at (?P<kg>[\d.]+) kg$")
 # the leg curl exercise was dropped from the stored row, so it is rebuilt by hand
 LEG_CURL = {
@@ -92,6 +95,24 @@ def parse_seed(text: str) -> list[tuple[str, float, int]]:
             kg, _, reps = item.strip().partition("x")
             sets.append((name.strip(), float(kg), int(reps)))
     return sets
+
+
+def budget_check(source: Path, ceiling: float, max_cost: float,
+                 now: datetime) -> tuple[bool, str]:
+    """Whether this month's cost in the source database (read only) plus `max_cost` stays
+    within `ceiling`, and a line saying so."""
+    start, end = _month_bounds(now.astimezone(HK))
+    db = sqlite3.connect(f"file:{source.as_posix()}?mode=ro", uri=True)
+    try:
+        spent = float(db.execute("SELECT COALESCE(SUM(cost_usd),0) FROM api_calls"
+                                 " WHERE timestamp>=? AND timestamp<?",
+                                 (start, end)).fetchone()[0])
+    finally:
+        db.close()
+    ok = spent + max_cost <= ceiling
+    return ok, (f"Budget check: this month US${spent:.4f} in {source.name} + --max-cost "
+                f"US${max_cost:.2f} = US${spent + max_cost:.4f}, "
+                f"{'within' if ok else 'over'} the US${ceiling:g} ceiling.")
 
 
 def prepare(source: Path, copy: Path, day: str, first: dict, old_machine: bool,
@@ -164,12 +185,17 @@ def run(args) -> int:
     if not incoming:
         print("No messages from Brian in that range.")
         return 1
+    config = load_config()
+    ok, line = budget_check(source, config.monthly_ceiling_usd, args.max_cost, datetime.now(HK))
+    print(line)
+    if not ok:
+        print("Refused: the replay's real cost could take the bot past its ceiling.")
+        return 3
     stamp = datetime.now().strftime("%H%M%S")
-    copy = SCRATCH / f"{day}-{stamp}" / "gym.db"
+    copy = Path(args.work_dir) / f"{day}-{stamp}" / "gym.db"
     preload = args.first > 0
     prepare(source, copy, day, incoming[0], args.old_machine, preload, parse_seed(args.seed))
 
-    config = load_config()
     store = Store(copy)
     clock = [datetime.fromisoformat(incoming[0]["timestamp"])]
     now = lambda: clock[0]
@@ -287,6 +313,8 @@ def main(argv=None) -> int:
     parser.add_argument("--append", action="store_true", help="append to the output file")
     parser.add_argument("--out", help="output file (default data/replay/<day>.txt)")
     parser.add_argument("--max-cost", type=float, default=0.50, help="stop above this US$")
+    parser.add_argument("--work-dir", default=str(WORK_DIR),
+                        help="folder for the database copy (default: the system temp folder)")
     args = parser.parse_args(argv)
     if args.out and Path(args.out).resolve().name.startswith("gym.db"):
         parser.error("--out must not be a database file")
