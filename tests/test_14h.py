@@ -1,5 +1,6 @@
 """Task 14h: traces per message, photos that are not meals, his own exercises, no surprise
-weeks, sets for another exercise, typo checks and faster replies. Made-up data only."""
+weeks, sets for another exercise, typo checks and faster replies. Made-up data only.
+Since Task 15c the model calls tools (scripted here) instead of sorting the message."""
 
 import importlib.util
 import io
@@ -12,11 +13,11 @@ import httpx
 import pytest
 from PIL import Image
 
-from fakes import FakeTelegram
+from fakes import FakeTelegram, tool_use
 from gym_coach import reports
 from gym_coach.store import Store
 from gym_coach.telegram import TelegramClient, TelegramError
-from test_session_fixes import DAY, EXS, build, report, say
+from test_session_fixes import DAY, EXS, build, report, say, tool_results, turn
 
 JPEG = b"\xff\xd8fake-image-bytes"
 MEAL = json.dumps({"meal": True, "what": "rice", "description": "chicken rice", "kcal": 650,
@@ -38,19 +39,20 @@ def traces(store):
 
 
 def prompt_of(call) -> str:
-    return json.dumps(call["messages"][0]["content"])
+    content = call["messages"][0]["content"]
+    return content if isinstance(content, str) else json.dumps(content)
 
 
 def has_image(call) -> bool:
     content = call["messages"][0]["content"]
-    return any(b.get("type") == "image" for b in content)
+    return not isinstance(content, str) and any(b.get("type") == "image" for b in content)
 
 
 # (1) the chat is kept for good
 
 def test_old_chat_is_kept(store):
     store.add_chat("2026-09-01T10:00:00+08:00", "in", "old")
-    app = build(store, ["{}", "fine"])[0]
+    app = build(store, ["fine"])[0]
     say(app, "hello")
     assert "old" in [r["text"] for r in store._rows("SELECT text FROM chat")]
 
@@ -63,10 +65,10 @@ def test_model_message_gets_a_trace_with_its_call(store):
     [t] = traces(store)
     chat_in = next(r for r in store.chat_lines(DAY) if r["direction"] == "in")
     assert t["chat_row"] == chat_in["id"]
-    assert json.loads(t["understood"])["intent"] == "report"
-    [call] = json.loads(t["calls"])
-    assert call["model"] == "claude-haiku-5-5" and call["seconds"] >= 0
-    assert "report" in call["reply"]
+    assert json.loads(t["understood"])[0]["tool"] == "log_sets"
+    first, last = json.loads(t["calls"])  # the tool round, then the final text
+    assert first["model"] == "claude-haiku-5-5" and first["seconds"] >= 0
+    assert first["tools"] == ["log_sets"] and last["tools"] == []
     assert t["seconds"] >= 0 and t["error"] is None
 
 
@@ -78,10 +80,10 @@ def test_command_trace_says_local(store):
 
 
 def test_model_error_is_traced(store):
-    app = build(store, ["not json", "not json"])[0]
+    app = build(store, [[tool_use("approve_plan", {})]] * 6)[0]  # never stops calling tools
     say(app, "what now")
     [t] = traces(store)
-    assert "valid JSON" in t["error"]
+    assert "6 rounds" in t["error"]
 
 
 def test_trace_failure_never_stops_the_reply(store, monkeypatch):
@@ -142,7 +144,7 @@ def test_show_chat_prints_the_chat_with_its_traces_and_set_times(store, tmp_path
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     out = mod.render(tmp_path / "t.db", DAY)
-    assert "presss 10" in out and '"intent": "report"' in out
+    assert "presss 10" in out and '"tool": "log_sets"' in out
     assert "claude-haiku-5-5" in out and "Press: 20 kg x 10" in out
     assert "(no save time) Set saved: Leg ext set 1: 20 kg x 12" in out
     assert "Set saved: Press set 1: 20 kg x 10" in out
@@ -150,17 +152,17 @@ def test_show_chat_prints_the_chat_with_its_traces_and_set_times(store, tmp_path
 
 # (3) a photo is not always a meal
 
-def test_caption_is_sorted_like_a_text_and_a_question_is_answered(store):
-    router, fake = build(store, [json.dumps({"intent": "question"}), "Yes, hold it at chest."])[1:]
+def test_caption_goes_to_the_coach_with_the_image_and_a_question_is_answered(store):
+    router, fake = build(store, ["Yes, hold it at chest."])[1:]
     reply = router.handle_photo(JPEG, "can I use this plate for halos?")
     assert reply == "Yes, hold it at chest."
-    assert "photo" in prompt_of(fake.calls[0]).lower() and not has_image(fake.calls[0])
-    assert has_image(fake.calls[1])
+    assert "caption" in prompt_of(fake.calls[0]).lower() and has_image(fake.calls[0])
     assert store.meals_on(DAY) == []
 
 
-def test_caption_with_meal_intent_sends_the_image_to_the_estimate(store):
-    router, fake = build(store, [json.dumps({"intent": "meal"}), MEAL])[1:]
+def test_caption_with_a_meal_sends_the_image_to_the_estimate(store):
+    router, fake = build(store, [[tool_use("log_meal", {"description": "lunch",
+                                                        "use_photo": True})], MEAL, ""])[1:]
     reply = router.handle_photo(JPEG, "lunch")
     assert has_image(fake.calls[1]) and reply.startswith("About 650 kcal")
     assert len(store.meals_on(DAY)) == 1
@@ -186,72 +188,77 @@ def test_photo_is_shrunk_before_the_image_call(store):
 # (4) his own exercises
 
 def test_own_exercise_is_logged_under_its_name_and_added_to_today(store):
-    router = build(store, [json.dumps({"intent": "report", "sets": [
-        {"exercise": "Plate halo", "weight_kg": 10, "reps": 10, "own": True}]})])[1]
+    router = build(store, [turn(tool_use("log_sets", {"sets": [
+        {"exercise": "Plate halo", "weight_kg": 10, "reps": 10, "own": True}]}))])[1]
     reply = router.handle("plate halo 10kg 10")
     assert [r["exercise"] for r in store.logged_sets(DAY)] == ["Plate halo"]
     added = store.plan_session(DAY)["exercises"][-1]
     assert added["name"] == "Plate halo" and added["own"] is True
     assert store.get(f"flow:{DAY}") == "0"
-    assert "Plate halo: 10 kg x 10" in reply and reply.endswith("Now: Press.")
+    assert "Plate halo: 10 kg x 10" in reply and reply.endswith("Shown now: Press.")
 
 
-def test_unknown_name_without_own_is_logged_as_the_shown_exercise(store):
-    router = build(store, [report("press machine", 10)])[1]
+def test_unknown_name_without_own_is_refused(store):
+    router, fake = build(store, [turn(report("press machine", 10)[0][0], text="Which one?")])[1:]
     router.handle("10")
-    assert [r["exercise"] for r in store.logged_sets(DAY)] == ["Press"]
+    [res] = tool_results(fake.calls[1])
+    assert res["is_error"] and "own true" in res["content"]
+    assert store.logged_sets(DAY) == []
 
 
-# (5) "X and Y now missing" is never a plan change (Task 14i adds the check against the chat)
+# (5) "X and Y now missing": the model sees every saved set, numbered
 
-def test_missing_sets_message_shows_the_log_and_changes_nothing(store):
+def test_missing_sets_message_is_answered_from_the_saved_sets(store):
     reports.log_report(store, DAY, [{"exercise": "Press", "weight_kg": 20, "reps": 10}] * 2)
     store.add_plan_session("2026-11-24", "home", "strength", "proposed", EXS)
-    router, fake = build(store, [json.dumps({"intent": "log_check"}),
-                                 json.dumps({"verdict": "misread"})])[1:]
+    router, fake = build(store, ["Leg ext and shoulder have no sets yet; press has two."])[1:]
     before = store.plan_sessions("2026-11-01", "2026-12-31")
-    reply = router.handle("leg ext and shoulder now missing")
-    assert "Press: 20 kg x 10, 10" in reply
-    assert "Missing: Pulldown (0 of 2), Leg ext (0 of 2), Shoulder (0 of 2)" in reply
-    assert len(store.logged_sets(DAY)) == 2 and len(fake.calls) == 2
-    assert all(c["model"] == "claude-haiku-5-5" for c in fake.calls)
+    router.handle("leg ext and shoulder now missing")
+    prompt = prompt_of(fake.calls[0])
+    assert "Press set 1: 20 kg x 10; Press set 2: 20 kg x 10" in prompt
+    assert "Leg ext: 0 of 2 sets logged" in prompt
+    assert len(store.logged_sets(DAY)) == 2 and len(fake.calls) == 1
     assert store.plan_sessions("2026-11-01", "2026-12-31") == before
 
 
 # (6) no surprise weeks
 
 def change_plan(change="less leg work"):
-    return json.dumps({"intent": "change_plan", "change": change})
+    return turn(tool_use("note_plan_change", {"change": change}))
+
+
+def revise(change="less leg work"):
+    return [tool_use("revise_proposed_week", {"change": change})]
 
 
 def test_change_with_a_proposed_week_asks_first(store):
     store.set_plan_status(DAY, "done")
     store.add_plan_session("2026-11-24", "home", "strength", "proposed", EXS)
-    router, fake = build(store, [change_plan(), "not json", "not json"])[1:]
+    router, fake = build(store, [change_plan(), revise(), "not json", "not json", "Sorry."])[1:]
     reply = router.handle("less leg work next week")
-    assert reply == "Revise the proposed week 23 Nov to 29 Nov with: less leg work? Reply yes."
-    assert len(fake.calls) == 1
+    assert "ask him whether to write the proposed week 23 Nov to 29 Nov" in reply
+    assert all(c["model"] == "claude-haiku-5-5" for c in fake.calls)
     router.handle("yes")
-    assert fake.calls[1]["model"] == "claude-opus-5-5"
-    assert "less leg work" in json.dumps(fake.calls[1]["messages"])
+    assert fake.calls[3]["model"] == "claude-opus-5-5"
+    assert "less leg work" in json.dumps(fake.calls[3]["messages"])
 
 
 def test_no_to_the_revise_question_writes_nothing(store):
     store.set_plan_status(DAY, "done")
     store.add_plan_session("2026-11-24", "home", "strength", "proposed", EXS)
-    router, fake = build(store, [change_plan(), json.dumps({"intent": "question"}), "Ok."])[1:]
+    router, fake = build(store, [change_plan(), "Ok, I keep it as a note."])[1:]
     router.handle("less leg work next week")
     router.handle("no")
     assert all(c["model"] != "claude-opus-5-5" for c in fake.calls)
-    assert not store.get("pending:revise")
+    assert store.get("pending:plan_change") == "less leg work"
 
 
 def test_change_during_an_open_session_is_only_a_note(store):
     store.add_plan_session("2026-11-24", "home", "strength", "proposed", EXS)
-    router, fake = build(store, [change_plan()])[1:]
+    router = build(store, [change_plan()])[1]
     reply = router.handle("less leg work next week")
-    assert "/propose" in reply and "Reply yes" not in reply
-    assert len(fake.calls) == 1 and "less leg work" in store.get("pending:plan_change")
+    assert "/propose" in reply and "ask him" not in reply
+    assert "less leg work" in store.get("pending:plan_change")
 
 
 # (7) a set for an exercise other than the one shown
@@ -260,14 +267,15 @@ def test_set_for_an_earlier_exercise_names_it_then_the_shown_one(store):
     store.set(f"flow:{DAY}", "1")
     router = build(store, [report("Press", 10)])[1]
     reply = router.handle("press 10")
-    assert "Press: 20 kg x 10" in reply and reply.endswith("Now: Pulldown.")
+    assert "Press: 20 kg x 10" in reply and reply.endswith("Shown now: Pulldown.")
     assert store.get(f"flow:{DAY}") == "1"
 
 
 def test_session_goes_back_to_exercises_with_sets_left_before_closing(store):
     store.set(f"flow:{DAY}", "3")
     reports.log_report(store, DAY, [{"exercise": "Press", "weight_kg": 20, "reps": 10}] * 2)
-    router = build(store, [report("Shoulder", 10, 10)])[1]
+    nxt = turn(tool_use("show_exercise", {"exercise": "next"}))
+    router = build(store, [report("Shoulder", 10, 10), nxt, nxt])[1]
     reply = router.handle("shoulder 10 10")
     assert "Session done" not in reply
     assert store.get(f"flow:{DAY}") == "1" and router.pop_exercise()[1] == 1
@@ -279,22 +287,22 @@ def test_session_goes_back_to_exercises_with_sets_left_before_closing(store):
 
 # (8) typos
 
-def test_weight_far_from_the_plan_asks_about_a_typo(store):
+def test_weight_far_from_the_plan_saves_and_says_to_ask_about_a_typo(store):
     router = build(store, [report("Press", 10, weight=200)])[1]
     reply = router.handle("press 200 10")
-    assert "Press: 200 kg x 10" in reply and "Typo?" in reply
-    assert "Reply with the right number." in reply
+    assert "Press: 200 kg x 10" in reply
+    assert "200 kg for Press is far from the plan (20 kg): ask him if it is a typo" in reply
 
 
 def test_weight_far_below_the_last_set_asks_about_a_typo(store):
     reports.log_report(store, DAY, [{"exercise": "Press", "weight_kg": 30, "reps": 10}])
     router = build(store, [report("Press", 10, weight=14)])[1]
-    assert "Typo?" in router.handle("press 14 10")
+    assert "far from his last set (30 kg)" in router.handle("press 14 10")
 
 
 def test_normal_weight_has_no_typo_question(store):
     router = build(store, [report("Press", 10, weight=25)])[1]
-    assert "Typo?" not in router.handle("press 25 10")
+    assert "typo" not in router.handle("press 25 10")
 
 
 # (9) faster replies
@@ -302,7 +310,7 @@ def test_normal_weight_has_no_typo_question(store):
 @pytest.mark.parametrize("text", ["35 12", "35kg 12, 10", "35"])
 def test_number_only_reports_go_to_the_model(store, text):
     # Brian, 2026-11-17: reading "35 12" without the model is "quite risky, no need"
-    router, fake = build(store, [json.dumps({"intent": "unclear", "question": "Which?"})])[1:]
+    router, fake = build(store, ["Which exercise?"])[1:]
     router.handle(text)
     assert len(fake.calls) == 1
 

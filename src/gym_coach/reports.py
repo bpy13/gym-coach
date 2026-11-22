@@ -50,6 +50,11 @@ def log_report(store, day: str, raw_sets) -> list[dict]:
     return sets
 
 
+def remove(store, day: str, row_id: int) -> None:
+    """Delete one logged set; the exercise's later sets move up one number."""
+    _rewrite(store, day, [r for r in store.logged_sets(day) if r["id"] != row_id])
+
+
 def mark_done(store, day: str) -> bool:
     """Mark a proposed or approved day `done` if any set is logged on it."""
     session = store.plan_session(day)

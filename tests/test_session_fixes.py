@@ -1,12 +1,13 @@
 """Task 14g: what the 17 Nov session showed. Late replies, changes to today's session, the
-pointer following reports, `done` only at the end, and messages read with the chat in view."""
+pointer following reports, `done` only at the end, and messages read with the chat in view.
+Since Task 15c the model calls tools (scripted here) instead of sorting the message."""
 
 import json
 from datetime import datetime
 
 import pytest
 
-from fakes import FakeClaude, FakeTelegram
+from fakes import FakeClaude, FakeTelegram, tool_use
 from gym_coach import reports
 from gym_coach.app import App
 from gym_coach.llm import HK, Claude
@@ -22,9 +23,32 @@ EXS = [{"name": n, "equipment": e, "sets": 2, "rep_low": 8, "rep_high": 12, "wei
                     ("Leg ext", "Leg extension"), ("Shoulder", "Shoulder press"))]
 
 
+class Turn(list):
+    """One message's scripted model replies: tool rounds, then the final text."""
+
+
+def turn(*tools, text=""):
+    """The model calls `tools` in one round, then answers `text` ("" falls back to the last
+    tool result, so tests can read what the tool did)."""
+    return Turn([list(tools), text])
+
+
 def report(name, *reps, weight=20):
-    return json.dumps({"intent": "report", "sets": [
-        {"exercise": name, "weight_kg": weight, "reps": r} for r in reps]})
+    return turn(tool_use("log_sets", {"sets": [
+        {"exercise": name, "weight_kg": weight, "reps": r} for r in reps]}))
+
+
+def flat(replies) -> list:
+    out = []
+    for r in replies:
+        out.extend(r) if isinstance(r, Turn) else out.append(r)
+    return out
+
+
+def tool_results(call) -> list[dict]:
+    """The tool results sent back to the model in this call."""
+    last = call["messages"][-1]["content"]
+    return [b for b in last if isinstance(b, dict) and b.get("type") == "tool_result"]
 
 
 class Clock:
@@ -47,7 +71,7 @@ def store(tmp_path):
 
 def build(store, replies, tg=None, clock=None):
     clock = clock or Clock()
-    fake = FakeClaude(replies)
+    fake = FakeClaude(flat(replies))
     router = Router(store, Claude(fake, store, 5.0, now=clock), "claude-haiku-5-5",
                     "claude-opus-5-5", now=clock, profile_path="examples/profile.md",
                     equipment_path="examples/equipment.md")
@@ -92,7 +116,7 @@ def test_undelivered_reply_is_sent_first_when_sending_works(store):
     say(app, "press 10", 1)
     assert tg.sent == []
     say(app, "press 9", 2)
-    assert tg.sent[0][1].startswith("(late) Press: 20 kg x 10.")
+    assert tg.sent[0][1].startswith("(late) Press: 20 kg x 10 ")
     assert "Press: 20 kg x 10, 9" in tg.sent[1][1]
     outs = [r for r in store.chat_lines(DAY) if r["direction"] == "out"]
     assert outs[0]["delivered"] == 1 and outs[0]["late"] == 1
@@ -110,24 +134,19 @@ def test_scheduler_message_also_flushes_late_reply(store):
 def test_late_reply_from_a_previous_day_is_not_sent(store):
     store.add_chat("2026-11-16T17:00:00+08:00", "out", "yesterday", delivered=False)
     tg = FakeTelegram()
-    app, _, _ = build(store, ["{}", "fine"], tg)
+    app, _, _ = build(store, ["fine"], tg)
     say(app, "hello")
     assert all("yesterday" not in t for _, t in tg.sent)
 
 
 # (3) a change during the session changes today only
 
-def change_today(action, exercise, **extra):
-    return json.dumps({"intent": "change_today",
-                       "today": {"action": action, "exercise": exercise, **extra}})
-
-
 def test_swap_shown_exercise_keeps_logged_sets_and_shows_the_new_one(store):
     store.set(f"flow:{DAY}", "1")
     reports.log_report(store, DAY, [{"exercise": "Pulldown", "weight_kg": 20, "reps": 10}])
-    router, fake = build(store, [change_today("swap", "Pulldown", new_exercise="Cable row",
-                                              equipment="Dual adjustable cable machine",
-                                              weight_kg=15)])[1:]
+    router, fake = build(store, [turn(tool_use("swap_exercise", {
+        "exercise": "Pulldown", "new_exercise": "Cable row",
+        "equipment": "Dual adjustable cable machine", "weight_kg": 15}))])[1:]
     reply = router.handle("pulldown is taken, can I do cable row")
     session = store.plan_session(DAY)
     names = [e["name"] for e in session["exercises"]]
@@ -137,20 +156,23 @@ def test_swap_shown_exercise_keeps_logged_sets_and_shows_the_new_one(store):
     assert len(store.logged_sets(DAY)) == 1
     assert router.pop_exercise()[1] == 2 and store.get(f"flow:{DAY}") == "2"
     assert "Cable row" in reply
-    assert len(fake.calls) == 1 and fake.calls[0]["model"] == "claude-haiku-5-5"
+    assert all(c["model"] == "claude-haiku-5-5" for c in fake.calls)
     assert store.plan_sessions("2026-11-23", "2026-11-29") == []
 
 
-def test_swap_to_equipment_not_at_todays_gym_asks_and_changes_nothing(store):
-    router = build(store, [change_today("swap", "Pulldown", new_exercise="Leg press",
-                                        equipment="Seated leg press")])[1]
+def test_swap_to_equipment_not_at_todays_gym_is_refused_and_changes_nothing(store):
+    router, fake = build(store, [turn(tool_use("swap_exercise", {
+        "exercise": "Pulldown", "new_exercise": "Leg press", "equipment": "Seated leg press"}),
+        text="There is no leg press here. Cable row instead?")])[1:]
     reply = router.handle("can I do leg press instead of pulldown")
-    assert "?" in reply
+    [res] = tool_results(fake.calls[1])
+    assert res["is_error"] and "- dual adjustable cable machine" in res["content"]
+    assert reply == "There is no leg press here. Cable row instead?"
     assert [e["name"] for e in store.plan_session(DAY)["exercises"]][1] == "Pulldown"
 
 
 def test_drop_shown_exercise_shows_the_next(store):
-    router = build(store, [change_today("drop", "Press")])[1]
+    router = build(store, [turn(tool_use("drop_exercise", {"exercise": "Press"}))])[1]
     router.handle("drop the press, my shoulder hurts")
     assert [e["name"] for e in store.plan_session(DAY)["exercises"]] == [
         "Pulldown", "Leg ext", "Shoulder"]
@@ -158,18 +180,19 @@ def test_drop_shown_exercise_shows_the_next(store):
 
 
 def test_weight_change_for_today(store):
-    router = build(store, [change_today("weight", "Leg ext", weight_kg=15)])[1]
+    router = build(store, [turn(tool_use("set_weight", {"exercise": "Leg ext",
+                                                        "weight_kg": 15}))])[1]
     router.handle("leg ext 15 kg today")
     assert store.plan_session(DAY)["exercises"][2]["weight_kg"] == 15
 
 
 def test_change_plan_without_a_proposed_week_is_a_note_not_a_new_week(store):
-    router, fake = build(store, [json.dumps({"intent": "change_plan",
-                                             "change": "less leg work"})])[1:]
+    router, fake = build(store, [turn(tool_use("note_plan_change",
+                                               {"change": "less leg work"}))])[1:]
     reply = router.handle("less leg work next week")
     assert "/propose" in reply
     assert store.plan_sessions("2026-11-18", "2026-12-31") == []
-    assert len(fake.calls) == 1  # the sorting call only, no coach call
+    assert all(c["model"] == "claude-haiku-5-5" for c in fake.calls)  # no planner call
     assert "less leg work" in store.get("pending:plan_change")
 
 
@@ -226,51 +249,41 @@ def test_evening_job_leaves_a_day_without_sets(store):
 
 # (7) the message is read with the chat and the session in view
 
-def test_sorting_call_sees_chat_lines_and_session_state(store):
+def test_coach_call_sees_chat_lines_and_session_state(store):
     reports.log_report(store, DAY, [{"exercise": "Press", "weight_kg": 20, "reps": 10}])
     store.add_chat("2026-11-17T16:58:00+08:00", "in", "press 10")
     store.add_chat("2026-11-17T16:58:02+08:00", "out", "Press: 20 kg x 10. 1 set left.",
                    delivered=False)
-    router, fake = build(store, [json.dumps({"intent": "question"}), "Sure."])[1:]
-    router.handle("did you get that?")
-    for call in fake.calls:
-        prompt = call["messages"][0]["content"]
-        prompt = prompt if isinstance(prompt, str) else json.dumps(prompt)
-        assert "Bot (NOT delivered): Press: 20 kg x 10. 1 set left." in prompt
-        assert "Brian: press 10" in prompt
-        assert "Press: 1 of 2 sets logged (20 kg x 10) <- shown now" in prompt
+    router, fake = build(store, ["Sure."])[1:]
+    assert router.handle("did you get that?") == "Sure."
+    [call] = fake.calls
+    prompt = call["messages"][0]["content"]
+    assert "Bot (NOT delivered): Press: 20 kg x 10. 1 set left." in prompt
+    assert "Brian: press 10" in prompt
+    assert "Press: 1 of 2 sets logged (Press set 1: 20 kg x 10) <- shown now" in prompt
 
 
-def test_repeated_report_after_undelivered_reply_logs_once(store):
+def test_repeat_after_an_undelivered_reply_is_left_to_the_model(store):
     tg = FlakyTelegram(fail=1)
-    app, _, _ = build(store, [report("Press", 10), report("Press", 10)], tg)
+    app, _, fake = build(store, [report("Press", 10), "Got it already: press 20 kg x 10."], tg)
     say(app, "press 10", 1)
     say(app, "press 10", 2)
     assert len(store.logged_sets(DAY)) == 1
     assert tg.sent[0][1].startswith("(late) ")
-    assert "already logged" in tg.sent[1][1].lower()
+    assert "Bot (NOT delivered): Press: 20 kg x 10" in fake.calls[-1]["messages"][0]["content"]
 
 
-def test_repeat_intent_logs_nothing(store):
-    reports.log_report(store, DAY, [{"exercise": "Press", "weight_kg": 20, "reps": 10}])
-    router = build(store, [json.dumps({"intent": "repeat"})])[1]
-    reply = router.handle("I already told you, press 10")
-    assert len(store.logged_sets(DAY)) == 1 and "Press: 20 kg x 10" in reply
-
-
-def test_same_again_logs_the_last_set_again_without_a_call(store):
+def test_same_again_is_logged_by_the_model(store):
     reports.log_report(store, DAY, [{"exercise": "Press", "weight_kg": 22.5, "reps": 9}])
-    router, fake = build(store, [])[1:]
-    reply = router.handle("same again")
+    router = build(store, [report("Press", 9, weight=22.5)])[1]
+    router.handle("same again")
     rows = store.logged_sets(DAY)
     assert [(r["exercise"], r["weight_kg"], r["reps"]) for r in rows] == [
         ("Press", 22.5, 9), ("Press", 22.5, 9)]
-    assert fake.calls == [] and "Session" not in reply
 
 
-def test_unplaced_message_gets_one_question_and_no_change(store):
-    router = build(store, [json.dumps({"intent": "unclear",
-                                       "question": "Which exercise was that for?"})])[1]
+def test_unplaced_message_gets_the_models_question_and_no_change(store):
+    router = build(store, ["Which exercise was that for?"])[1]
     assert router.handle("the other one") == "Which exercise was that for?"
     assert store.logged_sets(DAY) == []
 
@@ -281,9 +294,3 @@ def test_propose_uses_the_kept_note(store):
     router.handle("/propose")  # the model's answer is rejected; only the prompt matters here
     assert "less leg work" in json.dumps(fake.calls[0]["messages"])
     assert store.get("pending:plan_change") in ("", "less leg work")
-
-
-def test_same_again_keeps_an_exercise_outside_the_plan(store):
-    reports.log_report(store, DAY, [{"exercise": "Plank", "weight_kg": None, "reps": 60}])
-    build(store, [])[1].handle("same again")
-    assert [r["exercise"] for r in store.logged_sets(DAY)] == ["Plank", "Plank"]

@@ -1,10 +1,10 @@
 """Task 14i: the whole workout in view. A workout opens and closes, every model call sees its
 whole chat, traces name the current exercise, photos in a workout are never meals, weeks are
 asked about only after this week's last session, "typing" repeats, and a missing-sets message
-is checked against the chat. Made-up data only."""
+is checked against the chat. Made-up data only. Since Task 15c the model calls tools
+(scripted here) instead of sorting the message."""
 
 import importlib.util
-import json
 import sqlite3
 import threading
 import time
@@ -13,15 +13,14 @@ from pathlib import Path
 
 import pytest
 
-from fakes import FakeClaude
+from fakes import FakeClaude, tool_use
 from gym_coach import app as app_module
 from gym_coach import reports
 from gym_coach.llm import HK
-from gym_coach.router import CLASSIFY_SYSTEM
 from gym_coach.scheduler import Scheduler
 from gym_coach.store import Store
-from test_14h import JPEG, ActionTelegram, change_plan, has_image, prompt_of
-from test_session_fixes import DAY, EXS, build, report, say
+from test_14h import JPEG, ActionTelegram, change_plan, has_image, prompt_of, revise
+from test_session_fixes import DAY, EXS, build, flat, report, say, tool_results, turn
 
 
 @pytest.fixture
@@ -38,8 +37,8 @@ def workout(store) -> str:
     return store.get(f"workout:{DAY}") or ""
 
 
-def question(**extra):
-    return json.dumps({"intent": "question", **extra})
+NEXT = turn(tool_use("show_exercise", {"exercise": "next"}))
+FINISH = turn(tool_use("finish_workout", {}))
 
 
 # (1) a workout opens on "start" or when a message shows it has begun
@@ -53,7 +52,7 @@ def test_start_opens_the_workout_and_names_the_exercise(store):
 
 def test_start_without_the_morning_message_starts_the_flow(store):
     store._run("DELETE FROM kv WHERE key=?", (f"flow:{DAY}",))
-    router = build(store, [])[1]
+    router = build(store, [NEXT])[1]
     router.handle("start")  # the warm-up first (Task 14j), then the first exercise
     assert store.get(f"flow:{DAY}") == "0" and router.pop_exercise() is None
     router.handle("done")
@@ -66,14 +65,15 @@ def test_a_set_opens_the_workout_by_itself(store):
     assert workout(store).startswith("open|")
 
 
-def test_a_question_about_todays_exercise_opens_it(store):
-    router = build(store, [question(workout=True), "Keep your back flat."])[1]
-    router.handle("how do I do the pulldown?")
+def test_showing_an_exercise_opens_it(store):
+    router = build(store, [turn(tool_use("show_exercise", {"exercise": "Pulldown"}),
+                                text="Pulldown now: keep your chest up.")])[1]
+    router.handle("can I do the pulldown now?")
     assert workout(store).startswith("open|")
 
 
-def test_an_unrelated_question_does_not_open_it(store):
-    router = build(store, [question(), "Sleep 8 hours."])[1]
+def test_a_question_without_a_tool_call_does_not_open_it(store):
+    router = build(store, ["Sleep 8 hours."])[1]
     router.handle("how much should I sleep?")
     assert workout(store) == ""
 
@@ -82,20 +82,19 @@ def test_an_unrelated_question_does_not_open_it(store):
 
 def test_open_workout_shows_every_chat_line_since_it_opened(store):
     store.add_chat("2026-11-17T09:00:00+08:00", "in", "before the workout")
-    router, fake = build(store, [question(), "Fine."])[1:]
+    router, fake = build(store, ["Fine."])[1:]
     router.handle("start")
     for i in range(20):
         store.add_chat("2026-11-17T17:00:00+08:00", "in", f"line {i}")
     router.handle("how is it going?")
     prompt = prompt_of(fake.calls[0])
     assert "line 0" in prompt and "line 19" in prompt and "before the workout" not in prompt
-    assert "line 0" in prompt_of(fake.calls[1])  # the answer sees it too
 
 
 def test_without_a_workout_only_the_last_12_lines(store):
     for i in range(20):
         store.add_chat("2026-11-17T09:00:00+08:00", "in", f"line {i:02d}")
-    router, fake = build(store, [question(), "Fine."])[1:]
+    router, fake = build(store, ["Fine."])[1:]
     router.handle("hello")
     prompt = prompt_of(fake.calls[0])
     assert "line 07" not in prompt and "line 08" in prompt and "line 19" in prompt
@@ -119,10 +118,11 @@ def test_closes_when_no_exercise_has_sets_left(store):
 
 def test_end_closes_it_with_the_summary(store):
     reports.log_report(store, DAY, [{"exercise": "Press", "weight_kg": 20, "reps": 10}])
-    router, fake = build(store, [])[1:]
+    router, fake = build(store, [FINISH])[1:]
     router.handle("start")
     reply = router.handle("end")
-    assert workout(store).startswith("closed|") and fake.calls == []
+    assert workout(store).startswith("closed|")
+    assert [t["name"] for t in fake.calls[0]["tools"]][:2] == ["log_sets", "fix_set"]
     assert "Press: 20 kg x 10" in reply and "Missing: Press (1 of 2)" in reply
     assert store.plan_session(DAY)["status"] == "done"
 
@@ -135,7 +135,7 @@ def test_the_2100_close_closes_an_open_workout(store):
 
 
 def test_a_closed_workout_is_not_reopened_by_a_set(store):
-    router = build(store, [report("Press", 10)])[1]
+    router = build(store, [FINISH, report("Press", 10)])[1]
     router.handle("start")
     router.handle("end")
     router.handle("press 10")
@@ -183,11 +183,13 @@ def test_photo_without_caption_in_a_workout_is_a_question(store):
 
 
 def test_photo_with_a_meal_caption_in_a_workout_is_not_a_meal(store):
-    router, fake = build(store, [json.dumps({"intent": "meal"}), "Looks like a plate."])[1:]
+    router, fake = build(store, [turn(tool_use("log_meal", {"description": "this one",
+                                                            "use_photo": True}),
+                                      text="Looks like a plate.")])[1:]
     router.handle("start")
     reply = router.handle_photo(JPEG, "this one")
     assert reply == "Looks like a plate." and store.meals_on(DAY) == []
-    assert has_image(fake.calls[1])
+    assert has_image(fake.calls[0]) and tool_results(fake.calls[1])[0]["is_error"]
 
 
 # (6) the bot asks about next week only once this week's last session is done
@@ -206,18 +208,18 @@ def test_change_asks_when_the_last_session_day_has_passed(store):
     store.delete_plan_session(DAY)
     store.add_plan_session("2026-11-24", "home", "strength", "proposed", EXS)
     router = build(store, [change_plan()])[1]
-    assert router.handle("less leg work next week").endswith("Reply yes.")
+    assert "ask him whether" in router.handle("less leg work next week")
 
 
 def test_closing_the_last_session_of_the_week_asks_about_the_note(store):
     store.set("pending:plan_change", "less leg work")
     reports.log_report(store, DAY, [{"exercise": "Press", "weight_kg": 20, "reps": 10}])
-    router, fake = build(store, ["not json", "not json"])[1:]
+    router, fake = build(store, [FINISH, revise(), "not json", "not json", "Sorry."])[1:]
     router.handle("start")
     reply = router.handle("end")
     assert "Plan next week (23 Nov to 29 Nov) with: less leg work? Reply yes." in reply
     router.handle("yes")
-    assert fake.calls[0]["model"] == "claude-opus-5-5"
+    assert fake.calls[3]["model"] == "claude-opus-5-5"
 
 
 def test_propose_still_works_during_the_week(store):
@@ -238,7 +240,7 @@ def test_typing_repeats_until_the_reply(store, monkeypatch):
     monkeypatch.setattr(app_module, "TYPING_EVERY_S", 0.05)
     tg = ActionTelegram()
     app, router, _ = build(store, [], tg)
-    router.claude._client = SlowClaude([report("Press", 10)])
+    router.claude._client = SlowClaude(flat([report("Press", 10)]))
     say(app, "press 10")
     count = len(tg.actions)
     assert count >= 3 and tg.sent
@@ -247,72 +249,21 @@ def test_typing_repeats_until_the_reply(store, monkeypatch):
     assert not [t for t in threading.enumerate() if t.name == "typing"]
 
 
-# (8) "X and Y now missing" is checked against the chat
-
-def check(**fields):
-    return json.dumps(fields)
-
+# (8) "X and Y now missing": sets in the chat that were never saved are added by the model
 
 def test_sets_in_the_chat_that_were_never_saved_are_added(store):
     store.add_chat("2026-11-17T16:50:00+08:00", "in", "leg ext 20 10 10")
     store.add_chat("2026-11-17T16:50:05+08:00", "out", "Leg ext: 20 kg x 10, 10", delivered=False)
-    router, fake = build(store, [json.dumps({"intent": "log_check"}), check(
-        verdict="fix", add=[{"exercise": "Leg ext", "weight_kg": 20, "reps": 10}] * 2)])[1:]
+    router, fake = build(store, [report("Leg ext", 10, 10)])[1:]
     reply = router.handle("leg ext now missing")
     assert [r["exercise"] for r in store.logged_sets(DAY)] == ["Leg ext", "Leg ext"]
-    assert "Added: Leg ext 20 kg x 10, 10" in reply
-    assert "leg ext 20 10 10" in prompt_of(fake.calls[1]) and len(fake.calls) == 2
+    assert reply.startswith("Leg ext: 20 kg x 10, 10 (saved now: sets 1, 2)")
+    assert "leg ext 20 10 10" in prompt_of(fake.calls[0])
 
 
-def test_a_set_saved_wrong_is_fixed_and_the_reply_says_how(store):
-    reports.log_report(store, DAY, [{"exercise": "Press", "weight_kg": 20, "reps": 10},
-                                    {"exercise": "Press", "weight_kg": 20, "reps": 8}])
-    router = build(store, [json.dumps({"intent": "log_check"}), check(
-        verdict="fix", fix=[{"exercise": "Press", "set_no": 2, "weight_kg": 20, "reps": 10}])])[1]
-    reply = router.handle("press set 2 is wrong")
-    assert [r["reps"] for r in store.logged_sets(DAY)] == [10, 10]
-    assert "Fixed: Press set 2 from 20 kg x 8 to 20 kg x 10" in reply
+# (9) a set without a weight (bodyweight) is saved
 
-
-def test_saved_as_reported_asks_whether_he_misread(store):
-    reports.log_report(store, DAY, [{"exercise": "Press", "weight_kg": 20, "reps": 10}] * 2)
-    store.add_plan_session("2026-11-24", "home", "strength", "proposed", EXS)
-    before = store.plan_sessions("2026-11-01", "2026-12-31")
-    router = build(store, [json.dumps({"intent": "log_check"}), check(verdict="misread")])[1]
-    reply = router.handle("press now missing")
-    assert "Press: 20 kg x 10, 10" in reply and "misread" in reply and "?" in reply
-    assert len(store.logged_sets(DAY)) == 2
-    assert store.plan_sessions("2026-11-01", "2026-12-31") == before
-
-
-def test_the_check_never_deletes_and_skips_unknown_exercises(store):
-    reports.log_report(store, DAY, [{"exercise": "Press", "weight_kg": 20, "reps": 10}] * 2)
-    router = build(store, [json.dumps({"intent": "log_check"}), check(
-        verdict="fix", add=[{"exercise": "Zercher squat", "weight_kg": 40, "reps": 5}],
-        delete=[{"exercise": "Press", "set_no": 1}],
-        fix=[{"exercise": "Press", "set_no": 9, "weight_kg": 20, "reps": 1}])])[1]
-    reply = router.handle("my log is wrong")
-    assert [(r["exercise"], r["reps"]) for r in store.logged_sets(DAY)] == [("Press", 10)] * 2
-    assert "Zercher" not in reply and "misread" in reply
-
-
-def test_a_fix_that_completes_the_shown_exercise_moves_on(store):
-    reports.log_report(store, DAY, [{"exercise": "Press", "weight_kg": 20, "reps": 10}])
-    router = build(store, [json.dumps({"intent": "log_check"}), check(
-        verdict="fix", add=[{"exercise": "Press", "weight_kg": 20, "reps": 9}])])[1]
-    router.handle("press set 2 missing")
-    assert store.get(f"flow:{DAY}") == "1" and router.pop_exercise()[1] == 1
-
-
-# (9) the sorting JSON leaves out empty fields
-
-def test_sorting_prompt_asks_to_leave_out_empty_fields():
-    assert "leave out" in CLASSIFY_SYSTEM.lower()
-
-
-def test_short_json_without_optional_fields_is_read(store):
-    router = build(store, [json.dumps({"intent": "report",
-                                       "sets": [{"exercise": "Press", "reps": 10}]}),
-                           json.dumps({"intent": "change_plan"})])[1]
+def test_a_set_without_a_weight_is_saved(store):
+    router = build(store, [turn(tool_use("log_sets", {"sets": [
+        {"exercise": "Press", "reps": 10}]}))])[1]
     assert router.handle("press 10").startswith("Press: x 10")
-    assert "more rows" in router.handle("more rows next week")

@@ -7,15 +7,16 @@ from datetime import datetime
 import httpx
 import pytest
 
-from fakes import FakeTelegram
+from fakes import FakeTelegram, tool_use
 from gym_coach import reports
 from gym_coach.llm import HK
 from gym_coach.messages import WARM_UP, stretch_message, warm_up_message
 from gym_coach.scheduler import Scheduler
 from gym_coach.store import Store
 from gym_coach.telegram import TelegramClient
-from test_session_fixes import DAY, EXS, build, report, say
+from test_session_fixes import DAY, EXS, build, report, say, turn
 
+NEXT = turn(tool_use("show_exercise", {"exercise": "next"}))
 FINISH = {"keyboard": [[{"text": "Finish session"}]], "resize_keyboard": True}
 REMOVE = {"remove_keyboard": True}
 
@@ -62,13 +63,13 @@ def test_warm_up_is_one_list_in_the_code():
 
 def test_done_after_the_warm_up_sends_the_first_exercise(store):
     morning(store)
-    router, fake = build(store, [])[1:]
+    router = build(store, [NEXT, NEXT])[1]
     reply = router.handle("done")
-    assert reply.startswith("Warm-up done") and fake.calls == []
+    assert reply.startswith("Warm-up over. First exercise: Press")
     assert router.pop_exercise()[1] == 0
     assert store.get(f"flow:{DAY}") == "0" and store.logged_sets(DAY) == []
     assert (store.get(f"workout:{DAY}") or "").startswith("open|")
-    assert not router.handle("done").startswith("Warm-up done")  # only once
+    assert router.handle("done").startswith("Moved on from Press")  # only once
 
 
 def test_a_first_set_during_the_warm_up_ends_it_and_shows_the_exercise(store):
@@ -76,13 +77,13 @@ def test_a_first_set_during_the_warm_up_ends_it_and_shows_the_exercise(store):
     router = build(store, [report("Press", 10)])[1]
     reply = router.handle("press 10")
     assert "Press: 20 kg x 10" in reply and router.pop_exercise()[1] == 0
-    router2 = build(store, [])[1]
+    router2 = build(store, [NEXT])[1]
     router2.handle("done")  # now an ordinary "done": Press moves on
     assert store.get(f"flow:{DAY}") == "1"
 
 
 def test_start_without_the_morning_message_shows_the_warm_up(store):
-    router = build(store, [])[1]
+    router = build(store, [NEXT])[1]
     reply = router.handle("start")
     assert warm_up_message() in reply and router.pop_exercise() is None
     router.handle("done")
@@ -114,7 +115,8 @@ def test_stretch_list_follows_the_muscles_of_the_day():
 def test_finish_closes_the_workout_sends_the_summary_and_removes_the_button(store, word):
     all_but_last_set(store)
     tg = FakeTelegram()
-    app = build(store, [report("Shoulder", 10)], tg)[0]
+    finish = [] if word == "Finish session" else [turn(tool_use("finish_workout", {}))]
+    app = build(store, [report("Shoulder", 10), *finish], tg)[0]
     say(app, "shoulder 10", 1)
     say(app, word, 2)
     text = tg.sent[-1][1]

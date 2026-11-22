@@ -1,17 +1,17 @@
 """A whole strength session, one exercise at a time, through the scheduler, router and App."""
 
-import json
 from datetime import datetime
 
 import pytest
 
-from fakes import FakeClaude, FakeTelegram
+from fakes import FakeClaude, FakeTelegram, tool_use
 from gym_coach.app import App
 from gym_coach.llm import HK, Claude
 from gym_coach.router import Router
 from gym_coach.scheduler import Scheduler
 from gym_coach.store import Store
 from gym_coach.telegram import Incoming
+from test_session_fixes import flat, tool_results, turn
 
 DAY = "2026-11-17"
 NOW = datetime(2026, 11, 17, 7, 0, tzinfo=HK)
@@ -20,8 +20,11 @@ EXS = [{"name": n, "equipment": n, "sets": 2, "rep_low": 8, "rep_high": 12, "wei
 
 
 def report(name, *reps):
-    return json.dumps({"intent": "report", "sets": [
-        {"exercise": name, "weight_kg": 20, "reps": r} for r in reps]})
+    return turn(tool_use("log_sets", {"sets": [
+        {"exercise": name, "weight_kg": 20, "reps": r} for r in reps]}))
+
+
+NEXT = turn(tool_use("show_exercise", {"exercise": "next"}))
 
 
 @pytest.fixture
@@ -34,7 +37,7 @@ def store(tmp_path):
 
 def build(store, replies, tg=None):
     tg = tg or FakeTelegram()
-    router = Router(store, Claude(FakeClaude(replies), store, 5.0, now=lambda: NOW),
+    router = Router(store, Claude(FakeClaude(flat(replies)), store, 5.0, now=lambda: NOW),
                     "claude-haiku-5-5", "claude-opus-5-5", now=lambda: NOW, profile_path="examples/profile.md",
                     equipment_path="examples/equipment.md")
     app = App(tg, router, store)
@@ -47,8 +50,7 @@ def say(app, text, n):
 
 
 def test_whole_session_one_exercise_per_completing_reply(store):
-    app, sched, tg = build(store, [report("Press", 10, 10), report("Row", 10),
-                                   report("Curl", 12, 12)])
+    app, sched, tg = build(store, [NEXT, report("Press", 10, 10), report("Row", 10)])
     app.chat_id = 5
     sched.tick()
     texts = [t for _, t in tg.sent]
@@ -67,9 +69,10 @@ def test_whole_session_one_exercise_per_completing_reply(store):
     say(app, "row 10", 2)  # one set of two: short line, nothing new shown
     assert len(tg.sent) == n + 1 and "1 set left" in tg.sent[-1][1]
 
-    app2, _, _ = build(store, [report("Curl", 12, 12)], tg)  # restart in the middle
+    app2, _, _ = build(store, [NEXT, report("Curl", 12, 12)], tg)  # restart in the middle
     say(app2, "skip", 3)  # skip Row -> Curl arrives
-    assert "Skipped Row" in tg.sent[-2][1] and tg.sent[-1][1].startswith("Curl: 2 x 8-12")
+    assert "Moved on from Row: 20 kg x 10" in tg.sent[-2][1]
+    assert tg.sent[-1][1].startswith("Curl: 2 x 8-12")
 
     n = len(tg.sent)
     say(app2, "curl 12 12", 4)  # last: stretching and the Finish button, no further exercise
@@ -77,11 +80,12 @@ def test_whole_session_one_exercise_per_completing_reply(store):
     assert "Session done" in tg.sent[-1][1] and "Stretch" in tg.sent[-1][1]
     say(app2, "Finish session", 5)  # the summary
     assert "Press: 20 kg x 10, 10" in tg.sent[-1][1]
-    say(app2, "next", 6)  # nothing open: not an exercise command (falls to the classifier)
+    say(app2, "next", 6)  # nothing open: the model answers (scripted "ok")
+    assert tg.sent[-1][1] == "ok"
 
 
 def test_next_with_sets_logged_moves_on(store):
-    app, sched, tg = build(store, [report("Press", 10)])
+    app, sched, tg = build(store, [report("Press", 10), NEXT])
     app.chat_id = 5
     sched.tick()
     say(app, "press 10", 1)
@@ -90,11 +94,15 @@ def test_next_with_sets_logged_moves_on(store):
     assert tg.sent[-1][1].startswith("Row: 2 x 8-12")
 
 
-def test_reply_logged_against_shown_exercise_even_if_named_differently(store):
-    app, sched, _ = build(store, [report("bench thing", 10, 10)])
+def test_a_name_not_in_the_session_is_refused_and_the_model_logs_the_shown_one(store):
+    bad_round = report("bench thing", 10, 10)[0]  # the tool round alone; the model goes on
+    app, sched, _ = build(store, [bad_round, report("Press", 10, 10)])
     app.chat_id = 5
     sched.tick()
     say(app, "10 10", 1)
+    fake = app.router.claude.client
+    [res] = tool_results(fake.calls[1])
+    assert res["is_error"] and "Press, Row, Curl" in res["content"]
     assert {r["exercise"] for r in store.logged_sets(DAY)} == {"Press"}
 
 

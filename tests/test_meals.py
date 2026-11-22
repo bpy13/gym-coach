@@ -3,12 +3,13 @@ from datetime import datetime
 
 import pytest
 
-from fakes import FakeClaude, FakeTelegram
+from fakes import FakeClaude, FakeTelegram, tool_use
 from gym_coach.app import App
 from gym_coach.llm import HK, Claude
 from gym_coach.router import Router
 from gym_coach.store import Store
 from gym_coach.telegram import Incoming
+from test_session_fixes import flat, turn
 
 NOON = datetime(2026, 11, 17, 12, 30, tzinfo=HK)
 DAY = "2026-11-17"
@@ -27,7 +28,7 @@ def store(tmp_path):
 
 
 def make(store, replies):
-    fake = FakeClaude(replies)
+    fake = FakeClaude(flat(replies))
     router = Router(store, Claude(fake, store, 5.0, now=lambda: NOON),
                     "claude-haiku-5-5", "claude-opus-5-5", now=lambda: NOON,
                     profile_path="examples/profile.md", equipment_path="examples/equipment.md")
@@ -55,24 +56,31 @@ def test_running_total_adds_up(store):
     assert "Today: 850 of 1,588 kcal, 48 of 126 g protein." in reply
 
 
+def log_meal(description, use_photo=False):
+    return [tool_use("log_meal", {"description": description, "use_photo": use_photo})]
+
+
 def test_caption_goes_to_the_model(store):
-    router, fake = make(store, [json.dumps({"intent": "meal"}), meal("half chicken rice", 325, 18)])
+    router, fake = make(store, [log_meal("half portion", True),
+                                meal("half chicken rice", 325, 18), ""])
     router.handle_photo(JPEG, "half portion")
+    assert "half portion" in fake.calls[0]["messages"][0]["content"][-1]["text"]
     blocks = fake.calls[1]["messages"][0]["content"]
-    assert "half portion" in blocks[-1]["text"]
+    assert blocks[0]["type"] == "image" and "half portion" in blocks[-1]["text"]
 
 
-def test_text_meal_is_logged_through_the_classifier(store):
-    router, fake = make(store, [json.dumps({"intent": "meal"}), meal("eggs and toast", 350, 18)])
+def test_text_meal_is_logged_through_the_coach(store):
+    router, fake = make(store, [log_meal("two eggs and toast"), meal("eggs and toast", 350, 18),
+                                ""])
     reply = router.handle("had two eggs and toast")
-    assert "had two eggs and toast" in fake.calls[1]["messages"][0]["content"][-1]["text"]
+    assert "two eggs and toast" in fake.calls[1]["messages"][0]["content"][-1]["text"]
     assert reply.startswith("About 350 kcal, 18 g protein (eggs and toast).")
     assert len(store.meals_on(DAY)) == 1
 
 
 def test_correction_changes_the_last_meal(store):
-    router, _ = make(store, [meal("old", 100, 5), meal(), json.dumps(
-        {"intent": "meal_correction", "kcal": 400, "protein_g": None})])
+    router, _ = make(store, [meal("old", 100, 5), meal(),
+                             turn(tool_use("correct_meal", {"kcal": 400}))])
     router.handle_photo(JPEG, None)
     router.handle_photo(JPEG, None)
     reply = router.handle("that was 400 kcal")
@@ -83,8 +91,9 @@ def test_correction_changes_the_last_meal(store):
 
 
 def test_correction_without_a_meal(store):
-    router, _ = make(store, [json.dumps({"intent": "meal_correction", "kcal": 400})])
-    assert "could not tell" in router.handle("that was 400 kcal")
+    router, fake = make(store, [turn(tool_use("correct_meal", {"kcal": 400}))])
+    router.handle("that was 400 kcal")
+    assert fake.calls[1]["messages"][-1]["content"][0]["is_error"]
 
 
 def test_unusable_estimate_stores_nothing(store):

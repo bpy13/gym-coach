@@ -1,4 +1,5 @@
-"""Turn one incoming text into a reply: commands skip the model, the rest are classified."""
+"""Turn one incoming message into a reply: slash commands, "start" and the "Finish session"
+button are handled here; everything else goes to the coach chat with tools (Task 15c)."""
 
 from __future__ import annotations
 
@@ -7,75 +8,22 @@ from datetime import date, datetime, timedelta
 
 from gym_coach import meals, planner, reports, targets
 from gym_coach.albums import shrink
-from gym_coach.context import DEFAULT_EQUIPMENT, DEFAULT_PROFILE, equipment_for, profile_text
+from gym_coach.coach import Coach, ToolRefused
+from gym_coach.context import DEFAULT_EQUIPMENT, DEFAULT_PROFILE, equipment_for
 from gym_coach.llm import HK, CeilingReached, LLMError
 from gym_coach.messages import proposal_message, stretch_message, warm_up_message
 
-CLASSIFY_SYSTEM = """You read the new message from Brian, a gym-goer, to his coach bot and classify
-it. You also get the chat (his whole workout's chat while one is open, else today's last lines;
-each bot line says whether it reached him) and today's session with the sets logged per
-exercise and the exercise shown now. Read a short message ("35 12", "the other one", "I
-already told you") against those lines.
-Intents: report (he reports sets he did), correction (he fixes a set he already reported),
-repeat (he repeats a report whose sets are already logged, e.g. after a bot reply that was NOT
-delivered: never report it again), change_today (he asks to swap, drop or change the weight of
-an exercise of TODAY's session), approve (he accepts the proposed plan), change_plan (he asks
-to change a future week's plan), skip (he skips today's whole session), body (body weight; a
-waist he mentions is still stored), progress (asks for his numbers), meal (he says what he
-ate, or the photo with this caption is food he ate), meal_correction (he fixes the calories or
-protein of the last meal), log_check (he says sets are missing from the log or the log is
-wrong, without giving the right numbers, e.g. "X and Y now missing"), unclear (a short message
-you cannot place against the chat and session), question (anything else, including a question
-about a photo of gym equipment).
-Answer JSON with only the fields that apply: always "intent"; leave out empty lists, nulls,
-false values and the fields of other intents. All fields: {"intent": "<one intent>",
-"sets": [{"exercise": "...", "weight_kg": 35, "reps": 10, "effort": "<if he says>",
-"own": true}], "change": "<the requested change, for change_plan>",
-"today": {"action": "swap|drop|weight", "exercise": "<name in today's session>",
-"new_exercise": "<for swap>", "equipment": "<for swap: exactly as in today's gym list>",
-"weight_kg": <number>}, "question": "<one short question, for unclear>",
-"kcal": <number, for meal_correction>, "protein_g": <number, for meal_correction>,
-"weight_kg": <number, for body>, "waist_cm": <number, for body>, "workout": true}
-"workout": true when the message shows his workout has begun without reporting a set (e.g. a
-question about one of today's exercises).
-"sets" has one entry per set: expand "3x10 at 40 kg" into three entries and "35kg 10 10 8" into
-three entries. Use the exercise names of today's session. A set of an exercise that is not in
-today's session and is not a clear match for one of them is his own exercise: keep his name
-for it and set "own": true. For a correction list every set of each exercise he corrects, with
-the corrected values. Use an empty list when there are no sets.
-A change to an exercise while today's session is on is change_today, never change_plan. A
-message about missing or wrong sets is log_check, never change_plan."""
-
-CHECK_SYSTEM = """Brian says sets are missing from his workout log or the log is wrong. Check his
-claim against the chat and the saved sets. If he reported sets in the chat that are not saved,
-or are saved with other numbers (for example after a bot reply that never reached him), say
-what to add and what to fix, with the numbers from his own messages; never make numbers up.
-If the saved sets match what he reported, he misread: answer {"verdict": "misread"}.
-Answer JSON with only the fields you need: {"verdict": "fix", "add": [{"exercise": "<name in
-today's session>", "weight_kg": 35, "reps": 10}], "fix": [{"exercise": "<name>", "set_no": 2,
-"weight_kg": 35, "reps": 10}]}. "add" has one entry per set. Never remove a set."""
-
-BODY_JUMP_KG = 5.0
-PENDING_BODY = "pending:body"
 PENDING_CHANGE = "pending:plan_change"  # a future-week change kept for the next /propose
-PENDING_REVISE = "pending:revise"  # a change to the proposed week, waiting for his yes
-SAME_AGAIN = {"same again", "same", "again", "same as before", "same as last"}
 CHAT_LINES = 12  # today's chat lines each model call sees outside a workout (Task 14g)
 START_WORDS = {"start", "start workout", "start session"}  # open a workout (Task 14i)
-# close it; "finish session" is the button shown after the last exercise (Task 14j)
-END_WORDS = {"end", "end workout", "end session", "finish", "finish session", "finish workout"}
+FINISH_BUTTON = "finish session"  # the button shown after the last exercise (Task 14j)
 FINISH_KEYBOARD = {"keyboard": [[{"text": "Finish session"}]], "resize_keyboard": True}
 REMOVE_KEYBOARD = {"remove_keyboard": True}
 WARMUP_KEY = "warmup:"  # + day: "1" while the warm-up is sent and not yet done (Task 14j)
-WARMUP_DONE = {"warm up done", "warmup done", "warm-up done", "ready"}  # besides NEXT_WORDS
-# intents that show a workout has begun: it opens by itself (Task 14i)
-WORKOUT_INTENTS = {"report", "correction", "repeat", "log_check", "change_today"}
 FLOW_KEY = "flow:"  # + day: index of the exercise shown now (kv); absent = not started
-PASSED_KEY = "passed:"  # + day: exercises he moved on from with next/done/skip, "|"-joined
+PASSED_KEY = "passed:"  # + day: exercises he moved on from with "next", "|"-joined
 PHOTO_EDGE = 1024  # px; his photos are shrunk to this before an image call (Task 14h)
-TYPO_HIGH, TYPO_LOW = 1.5, 0.5  # a weight outside these times the plan or last set: "Typo?"
-NEXT_WORDS = {"next", "done", "skip"}  # orchestrator's call, 2026-11-16; Brian may change it
-YES = {"yes", "y", "yep", "yeah", "ok", "correct", "right", "confirm"}
+TYPO_HIGH, TYPO_LOW = 1.5, 0.5  # a weight outside these times the plan or last set: "far"
 
 HELP = ("Hi! I'm your gym coach. I send the day's session; reply with what you did "
         "(e.g. \"chest press 35 kg 10 10 8\"). Commands: /today, /progress, /cost. "
@@ -95,8 +43,11 @@ class Router:
         self.album_session: dict | None = None  # first session of the last proposal
         self.exercise_to_send: tuple[dict, int] | None = None  # (session, index) to show next
         self.keyboard: dict | None = None  # reply_markup for the reply (Task 14j)
-        # for the app's trace of the last message: the sorting call's JSON, or "local" when
-        # no model call sorted it; and the error that became a "Sorry" reply, if any
+        # structured texts the code sends after the model's reply, exactly as written:
+        # (what it is, for the tool result; the text)
+        self.tail: list[tuple[str, str]] = []
+        # for the app's trace of the last message: the coach call's tool calls as JSON, or
+        # "local" when no model call read it; and the error that became a "Sorry" reply
         self.understood: str | None = None
         self.error: str | None = None
         # keyword arguments for planner.propose (it falls back to data\ when they are None)
@@ -107,24 +58,24 @@ class Router:
 
     def handle(self, text: str) -> str:
         """Reply text for one message from the allowed user."""
-        self.understood, self.error, self.keyboard = "local", None, None
+        self.understood, self.error, self.keyboard, self.tail = "local", None, None, []
         return self._guarded(self._handle, text.strip())
 
     def handle_photo(self, jpeg: bytes, caption: str | None = None) -> str:
-        """Reply to a photo. A caption is read like a text (only a meal sends the image to the
-        meal estimate); without one, the image call says whether it is a meal at all."""
-        self.understood, self.error, self.keyboard = "local", None, None
+        """Reply to a photo. In an open workout, or with a caption, the coach call gets the
+        image and decides; outside a workout a photo without a caption is a meal estimate."""
+        self.understood, self.error, self.keyboard, self.tail = "local", None, None, []
         try:
             jpeg = shrink(jpeg, PHOTO_EDGE)
         except (OSError, ValueError):
             pass  # not an image Pillow can read: sent as it came
+        day = self._today().isoformat()
         if caption and caption.strip():
-            return self._guarded(self._handle, caption.strip(), jpeg)
-        if self._workout_since(self._today().isoformat()) is not None:
+            return self._guarded(self._coach, day, caption.strip(), jpeg, True)
+        if self._workout_since(day) is not None:
             # Brian: a photo in the gym session "is never a meal picture, always a query"
-            self.understood = "photo without caption in the workout: question"
-            return self._guarded(self._answer, "(a photo without a caption, sent during the "
-                                 "workout: a question or report about it)", None, jpeg)
+            return self._guarded(self._coach, day, "(a photo without a caption, sent during "
+                                 "the workout)", jpeg, False)
         self.understood = "photo without caption: meal estimate"
         return self._guarded(self._meal, None, jpeg)
 
@@ -142,8 +93,7 @@ class Router:
     def _today(self) -> date:
         return self._now().astimezone(HK).date()
 
-    def _handle(self, text: str, jpeg: bytes | None = None) -> str:
-        """`jpeg`: the photo this text came with as its caption."""
+    def _handle(self, text: str) -> str:
         command = text.split()[0].lower() if text.startswith("/") else None
         if command == "/start":
             return HELP
@@ -159,123 +109,160 @@ class Router:
         if command == "/cost":
             return (f"This month: US${self.claude.month_cost():.2f} "
                     f"of US${self.claude.ceiling_usd:g}.")
-        pending = self._pending_body(text)
-        if pending is None:
-            pending = self._pending_revise(text)
-        if pending is not None:
-            return pending
         day = self._today().isoformat()
         word = text.lower().strip(" .!")
         if word in START_WORDS:
             return self._start(day)
-        if word in END_WORDS:
+        if word == FINISH_BUTTON:
             return self._end(day)
-        flow = self._flow_reply(text)
-        if flow is not None:
-            return flow
-        if text.lower().strip(" .!") in SAME_AGAIN:
-            again = self._same_again(day)
-            if again is not None:
-                return again
-        context = self.context(day)
-        lead = ("New message from Brian (sent with a photo; this text is its caption)"
-                if jpeg is not None else "New message from Brian")
-        data = self.claude.json(self.fast, f"{context}\n\n{lead}: {text}",
-                                system=CLASSIFY_SYSTEM)
-        if not isinstance(data, dict):
-            data = {}
-        self.understood = json.dumps(data, ensure_ascii=False)
-        intent = data.get("intent")
-        if intent in WORKOUT_INTENTS or data.get("workout") is True:
-            self._open(day)
-        if intent == "report" and self._repeats_undelivered(day, text):
-            intent = "repeat"
-        if intent == "repeat":
-            return self._state_reply(day)
-        if intent == "unclear":
-            question = str(data.get("question") or "").strip()
-            return question or "Sorry, I could not place that. Which exercise do you mean?"
-        if intent == "report":
-            warm_up = self._warm_up_over(day)  # a first set ends the warm-up
-            reply = self._report(day, data.get("sets"))
-            if warm_up and self.exercise_to_send is None:
-                self.exercise_to_send = self._shown(day)  # its picture, never sent yet
-            return reply
-        if intent == "change_today":
-            return self._change_today(day, data.get("today"))
-        if intent == "correction":
-            if not reports.correct(self.store, day, data.get("sets")):
-                return "I could not tell what to correct. Say e.g. \"chest press was 30 kg\"."
-            return reports.format_log(self.store, day, "Corrected:")
-        if intent == "log_check":
-            return self._check(day, text, context)
-        if intent == "approve":
-            return self._approve()
-        if intent == "change_plan":
-            return self._change_plan(day, str(data.get("change") or text))
-        if intent == "skip":
-            if not self.store.plan_session(day):
-                return "There is no session planned today."
-            self.store.set_plan_status(day, "skipped")
-            return "Skipped today's session."
-        if intent == "meal":
-            if jpeg is not None and self._workout_since(day) is not None:
-                return self._answer(text, context, jpeg)  # a photo in a workout: never a meal
-            return self._meal(text, jpeg)
-        if intent == "meal_correction":
-            try:
-                fixed = meals.correct_last(self.store, day, data.get("kcal"),
-                                           data.get("protein_g"))
-            except LLMError:
-                fixed = False
-            if not fixed:
-                return "I could not tell what to correct. Say e.g. \"that was 400 kcal\"."
-            return "Corrected the last meal. " + meals.total_line(self.store, day, self._profile())
-        if intent == "body":
-            return self._body(day, data.get("weight_kg"), data.get("waist_cm"))
-        if intent == "progress":
-            return "That is coming soon."
-        return self._answer(text, context, jpeg)
+        return self._coach(day, text)
 
-    # reports during a session
-    def _report(self, day: str, raw_sets, remap: bool = True) -> str:
+    def _coach(self, day: str, text: str, jpeg: bytes | None = None,
+               caption: bool = False) -> str:
+        """The coach call: the model reads the message with the chat and the session, calls
+        tools, and writes the reply; the structured texts the tools queued follow it."""
+        coach = Coach(self, day, jpeg, caption)
+        try:
+            reply = coach.reply(text).strip()
+        finally:
+            self.understood = json.dumps(coach.calls, ensure_ascii=False)
+        reply = reply or coach.last_result or "Sorry, I have no answer to that."
+        tail, self.tail = self.tail, []
+        return "\n\n".join([reply, *(t for _, t in tail)])
+
+    # what the tools do (coach.py checks the hard rules first)
+    def _log(self, day: str, sets: list[dict]) -> str:
+        """Save checked sets; the pointer follows him and a completed exercise shows the next
+        one. Returns each exercise's log line, the sets left and any weight far off."""
         shown = self._shown(day)
-        raw = self._to_shown(raw_sets, shown) if remap else raw_sets
         before = self.store.logged_sets(day)
-        logged = reports.log_report(self.store, day, raw)
+        logged = reports.log_report(self.store, day, sets)
         if not logged:
-            return "I could not find any sets in that. Try \"chest press 35 kg 10 10 8\"."
-        typo = self._typo(day, logged, before)
-        added = self._add_own(day, raw, logged)
-        if shown is None:
-            return reports.format_log(self.store, day) + typo
-        index = shown[1]
-        session = self.store.plan_session(day)  # with his own exercises added
-        exercises = session["exercises"]
-        names = [e["name"].strip().lower() for e in exercises]
-        reported = {names.index(s["exercise"].lower()) for s in logged
-                    if s["exercise"].lower() in names}
-        later = [i for i in reported if i > index and not exercises[i].get("own")]
-        if later:  # he moved on: the pointer follows him
-            index = max(later)
+            raise ToolRefused("No usable sets.")
+        far = self._typo(day, logged, before)
+        added = self._add_own(day, sets, logged)
+        warm_up = self._warm_up_over(day)  # a first set ends the warm-up
+        session = self.store.plan_session(day)
+        new: dict[str, int] = {}
+        for s in logged:
+            new[s["exercise"]] = new.get(s["exercise"], 0) + 1
+        lines = []
+        for name, count in new.items():
+            done = reports.sets_done(self.store, day, name)
+            numbers = ", ".join(str(n) for n in range(done - count + 1, done + 1))
+            line = (f"{reports.format_exercise(self.store, day, name)} "
+                    f"(saved now: set{'s' if count > 1 else ''} {numbers})")
+            if name.strip().lower() in added:
+                line += " (his own exercise, added to today)"
+            ex = next((e for e in (session or {}).get("exercises", [])
+                       if e["name"].strip().lower() == name.strip().lower()), None)
+            if ex is not None and not ex.get("own"):
+                left = max(0, int(ex["sets"]) - done)
+                line += f". {left} set{'s' if left != 1 else ''} left"
+            lines.append(line + ".")
+        if shown is not None:
+            exercises = session["exercises"]
+            index = shown[1]
+            names = [e["name"].strip().lower() for e in exercises]
+            later = [names.index(s["exercise"].lower()) for s in logged
+                     if s["exercise"].lower() in names]
+            later = [i for i in later if i > index and not exercises[i].get("own")]
+            if later:  # he moved on: the pointer follows him
+                index = max(later)
+                self.store.set(FLOW_KEY + day, str(index))
+            if self._next_open(session, day, index) != index:
+                self._move_to(session, day, index, "", show=True)
+            elif warm_up:
+                self.exercise_to_send = (session, index)  # its card, never sent yet
+            now = self._shown(day)
+            if now is not None and self.exercise_to_send is None:
+                lines.append(f"Shown now: {now[0]['exercises'][now[1]]['name']}.")
+        return "\n".join(lines) + far
+
+    def _show(self, day: str, session: dict, index: int | None) -> str:
+        """Show the exercise at `index`, or with None the next open one (moving on from the
+        one shown); a pending warm-up ends and its first exercise follows."""
+        if self.store.get(FLOW_KEY + day) is None:
+            self.store.set(FLOW_KEY + day, "0")
+        warm_up = self._warm_up_over(day)
+        if index is not None:
+            name = session["exercises"][index]["name"]
+            passed = (self.store.get(PASSED_KEY + day) or "").split("|")
+            self.store.set(PASSED_KEY + day,
+                           "|".join(p for p in passed if p != name.strip().lower()))
             self.store.set(FLOW_KEY + day, str(index))
-        others = sorted(reported - {index})
-        if not others:
-            return self._after_report(session, index, day) + typo
-        # sets for exercises other than the one shown: name them, then what is shown now
-        lines = [reports.format_exercise(self.store, day, exercises[i]["name"])
-                 + (" (your own exercise, added to today)" if names[i] in added else "")
-                 for i in others]
-        if index in reported:
-            lines.append(self._after_report(session, index, day))
-            return "\n".join(lines) + typo
-        nxt = self._next_open(session, day, index)
-        if nxt == index:
-            return "\n".join(lines + [f"Now: {exercises[index]['name']}."]) + typo
-        return self._move_to(session, day, index, "\n".join(lines), show=True) + typo
+            self.exercise_to_send = (session, index)
+            return ("Warm-up over. " if warm_up else "") + f"Now: {name}."
+        shown = self._shown(day)
+        if shown is None:
+            return "Every exercise of today's session is done or passed."
+        index = shown[1]
+        name = session["exercises"][index]["name"]
+        if warm_up:
+            self.exercise_to_send = shown
+            return f"Warm-up over. First exercise: {name}."
+        passed = self.store.get(PASSED_KEY + day) or ""  # not shown again before the end
+        self.store.set(PASSED_KEY + day, f"{passed}|{name.strip().lower()}")
+        if reports.sets_done(self.store, day, name):
+            lead = f"Moved on from {reports.format_exercise(self.store, day, name)}."
+        else:
+            lead = f"Moved on from {name} (nothing logged for it)."
+        self._move_to(session, day, index + 1, lead, show=True)
+        return lead
+
+    def _swap(self, session: dict, index: int, done: int, name: str, gear: str,
+              weight: float | None, day: str) -> str:
+        ex = session["exercises"][index]
+        new = {"name": name, "equipment": gear, "sets": max(1, int(ex["sets"]) - done),
+               "rep_low": ex["rep_low"], "rep_high": ex["rep_high"],
+               "weight_kg": weight if weight is not None else ex["weight_kg"]}
+        if done:
+            ex["sets"] = done
+            session["exercises"].insert(index + 1, new)
+        else:
+            session["exercises"][index] = new
+        self._save(session)
+        lead = (f"Swapped {ex['name']} for {name} on {gear} today: {new['sets']} x "
+                f"{new['rep_low']}-{new['rep_high']} at {new['weight_kg']:g} kg.")
+        return self._after_change(session, day, index, done, 1 if done else 0, lead)
+
+    def _drop(self, session: dict, index: int, day: str) -> str:
+        ex = session["exercises"][index]
+        done = reports.sets_done(self.store, day, ex["name"])
+        if done:
+            ex["sets"] = done
+        else:
+            session["exercises"].pop(index)
+        self._save(session)
+        return self._after_change(session, day, index, done, 0 if done else -1,
+                                  f"Dropped {ex['name']} for today.")
+
+    def _note_change(self, change: str) -> str:
+        """Keep a future-week change as a note (never writes a week by itself, Task 14h)."""
+        note = self.store.get(PENDING_CHANGE) or ""
+        if change.lower() not in note.lower():
+            note = "; ".join(c for c in (note, change) if c)
+        self.store.set(PENDING_CHANGE, note)
+        week = self._proposal_week()
+        if self._week_finished():
+            what = (f"the proposed week {_day_month(week)} to "
+                    f"{_day_month(week + timedelta(days=6))}" if week else "next week's plan")
+            return (f"Kept as a note: {note}. This week's sessions are over, so ask him whether "
+                    f"to write {what} with it now (revise_proposed_week).")
+        return (f"Kept as a note for next week's plan: {note}. Today's session stays. The bot "
+                "asks about it once this week's last session is done; /propose works any time.")
+
+    def _revise(self, change: str) -> str:
+        """Write the proposed (or next) week with the kept note and this change."""
+        note = self.store.get(PENDING_CHANGE) or ""
+        both = note if change.lower() in note.lower() else "; ".join(
+            c for c in (note, change) if c)
+        reply = self._propose(both or None)
+        self.store.set(PENDING_CHANGE, "")
+        return reply
 
     def _add_own(self, day: str, raw_sets, logged: list[dict]) -> set[str]:
-        """Add his own exercises (sets the sorting call marked "own") to today's strength
+        """Add his own exercises (sets the model marked "own") to today's strength
         session, marked "own": true, with the sets he did. Returns the names (lower case)
         added now."""
         own = {str(s.get("exercise", "")).strip().lower() for s in raw_sets or []
@@ -301,7 +288,7 @@ class Router:
         return added
 
     def _typo(self, day: str, logged: list[dict], before: list[dict]) -> str:
-        """"Typo? ..." when a weight is over 1.5 times or under half the last set of that
+        """A note when a weight is over 1.5 times or under half the last set of that
         exercise (or, with none today, its planned weight); else ""."""
         session = self.store.plan_session(day)
         plan = {e["name"].strip().lower(): e.get("weight_kg")
@@ -314,80 +301,11 @@ class Router:
             ref = last[-1] if last else _number(plan.get(key))
             if weight and ref and not TYPO_LOW * ref <= weight <= TYPO_HIGH * ref:
                 flagged.append(f"{weight:g} kg for {s['exercise']} is far from "
-                               f"{'your last set' if last else 'the plan'} ({ref:g} kg)")
+                               f"{'his last set' if last else 'the plan'} ({ref:g} kg)")
         if not flagged:
             return ""
-        return "\nTypo? " + "; ".join(dict.fromkeys(flagged)) + ". Reply with the right number."
-
-    def _same_again(self, day: str) -> str | None:
-        """Log today's last set once more; None when nothing is logged yet today."""
-        rows = self.store.logged_sets(day)
-        if not rows:
-            return None
-        last = rows[-1]
-        return self._report(day, [{"exercise": last["exercise"], "weight_kg": last["weight_kg"],
-                                   "reps": last["reps"], "effort": last["effort"]}], remap=False)
-
-    def _repeats_undelivered(self, day: str, text: str) -> bool:
-        """True when his previous message was this same text and no reply to it got through."""
-        lines = self.store.chat_lines(day, CHAT_LINES)
-        last_in = max((i for i, r in enumerate(lines) if r["direction"] == "in"), default=None)
-        if last_in is None or _norm(lines[last_in]["text"]) != _norm(text):
-            return False
-        replies = [r for r in lines[last_in + 1:] if r["direction"] == "out"]
-        return bool(replies) and not any(r["delivered"] for r in replies)
-
-    def _state_reply(self, day: str, header: str = "Already logged, nothing added:") -> str:
-        """What is logged, what is missing and what comes next, changing nothing."""
-        lines = [reports.format_log(self.store, day, header)]
-        session = self.store.plan_session(day)
-        if session and session["kind"] == "strength":
-            missing = reports.missing(self.store, day, session)
-            if missing:
-                lines.append("Missing: " + ", ".join(missing))
-        shown = self._shown(day)
-        if shown is not None:
-            lines.append(f"Now: {shown[0]['exercises'][shown[1]]['name']}.")
-        return "\n".join(lines)
-
-    # "X and Y now missing": checked against the chat, fixed or asked about (Task 14i)
-    def _check(self, day: str, text: str, context: str) -> str:
-        """One fast-model call compares his claim with the chat and the saved sets. Sets he
-        reported but that were never saved (or saved with other numbers) are added or fixed
-        and the reply says exactly what changed; otherwise he is asked whether he misread.
-        Never deletes a set."""
-        rows = self.store.logged_sets(day)
-        saved = "\n".join(f"{r['exercise']} set {r['set_no']}: "
-                          f"{reports.sets_text([r])}" for r in rows) or "(none)"
-        data = self.claude.json(self.fast, f"{context}\n\nSaved sets:\n{saved}\n\n"
-                                f"His message: {text}", system=CHECK_SYSTEM)
-        data = data if isinstance(data, dict) else {}
-        self.understood += " | check: " + json.dumps(data, ensure_ascii=False)
-        session = self.store.plan_session(day)
-        names = {r["exercise"].strip().lower(): r["exercise"] for r in rows}
-        names.update({e["name"].strip().lower(): e["name"]
-                      for e in (session or {}).get("exercises", [])})
-        changes = []
-        add = [{**s, "exercise": names[str(s.get("exercise", "")).strip().lower()]}
-               for s in data.get("add") or []
-               if isinstance(s, dict) and str(s.get("exercise", "")).strip().lower() in names]
-        groups: dict[str, list[dict]] = {}
-        for s in reports.log_report(self.store, day, add):
-            groups.setdefault(s["exercise"], []).append(s)
-        changes += [f"Added: {name} {reports.sets_text(sets)}" for name, sets in groups.items()]
-        for f in data.get("fix") or []:
-            line = self._fix_set(day, f)
-            if line:
-                changes.append(line)
-        if not changes:
-            return (self._state_reply(day, "Saved as you reported them, nothing changed:")
-                    + "\nDid you misread? If a set is still wrong, send the right numbers.")
-        lead = "\n".join(changes)
-        shown = self._shown(day)
-        if shown is not None and self._next_open(shown[0], day, shown[1]) != shown[1]:
-            now = reports.format_log(self.store, day, "Today's log now:")
-            return self._move_to(shown[0], day, shown[1], f"{lead}\n{now}", show=True)
-        return f"{lead}\n" + self._state_reply(day, "Today's log now:")
+        return ("\nSaved, but " + "; ".join(dict.fromkeys(flagged))
+                + ": ask him if it is a typo.")
 
     def _fix_set(self, day: str, fix) -> str | None:
         """Change one saved set's weight and reps; a line saying how, or None."""
@@ -448,7 +366,7 @@ class Router:
         return True
 
     def _end(self, day: str) -> str:
-        """"end", "finish" or the "Finish session" button: close and remove the button."""
+        """The "Finish session" button or finish_workout: close, remove the button."""
         session = self.store.plan_session(day)
         if session and session["kind"] == "strength":
             self.store.set(FLOW_KEY + day, str(len(session["exercises"])))  # no more exercises
@@ -516,7 +434,9 @@ class Router:
             names.add(name.strip().lower())
             done = reports.sets_done(self.store, day, name)
             if done:
-                sets = reports.format_exercise(self.store, day, name).split(": ", 1)[1]
+                sets = "; ".join(f"{name} set {r['set_no']}: {reports.sets_text([r])}"
+                                 for r in self.store.logged_sets(day)
+                                 if r["exercise"].strip().lower() == name.strip().lower())
                 line = f"- {name}: {done} of {ex['sets']} sets logged ({sets})"
             else:
                 line = (f"- {name}: 0 of {ex['sets']} sets logged"
@@ -527,10 +447,10 @@ class Router:
         others = [ln for ln in logged if ln.split(":")[0].strip().lower() not in names]
         if others:
             lines.append("Also logged: " + "; ".join(others))
-        if session["status"] in ("proposed", "approved"):  # for a swap
-            gear = self._equipment(session["gym"])
-            if gear:
-                lines.append(f"Equipment at the {session['gym']} gym: " + ", ".join(gear))
+        gear = self._equipment(session["gym"])
+        if gear:  # for a swap; one per line so names cannot blend (Task 15c)
+            lines.append(f"Equipment at the {session['gym']} gym (use these names exactly):\n"
+                         + "\n".join(f"- {g}" for g in gear))
         return "\n".join(lines)
 
     def _equipment(self, gym: str) -> list[str]:
@@ -540,64 +460,6 @@ class Router:
             return []
 
     # changes to today's session (never a new week)
-    def _change_today(self, day: str, change) -> str:
-        session = self.store.plan_session(day)
-        if not session or session["kind"] != "strength":
-            return "There is no strength session today to change."
-        change = change if isinstance(change, dict) else {}
-        exercises = session["exercises"]
-        wanted = str(change.get("exercise") or "").strip().lower()
-        index = next((i for i, e in enumerate(exercises)
-                      if e["name"].strip().lower() == wanted), None)
-        if index is None and wanted:
-            index = next((i for i, e in enumerate(exercises)
-                          if wanted in e["name"].lower() or e["name"].lower() in wanted), None)
-        if index is None:
-            return "Which exercise of today's session do you want to change?"
-        ex = exercises[index]
-        done = reports.sets_done(self.store, day, ex["name"])
-        action = change.get("action")
-        if action == "weight":
-            weight = _number(change.get("weight_kg"))
-            if weight is None:
-                return f"What weight do you want for {ex['name']} today?"
-            ex["weight_kg"] = weight
-            self._save(session)
-            return f"{ex['name']} today: {weight:g} kg."
-        if action == "swap":
-            return self._swap(session, index, done, change, day)
-        if action == "drop":
-            if done:
-                ex["sets"] = done
-            else:
-                exercises.pop(index)
-            self._save(session)
-            return self._after_change(session, day, index, done, 0 if done else -1,
-                                      f"Dropped {ex['name']} for today.")
-        return "Do you want to swap, drop or change the weight of that exercise?"
-
-    def _swap(self, session: dict, index: int, done: int, change: dict, day: str) -> str:
-        ex = session["exercises"][index]
-        name = str(change.get("new_exercise") or "").strip()
-        gear = str(change.get("equipment") or "").strip()
-        allowed = {g.lower() for g in self._equipment(session["gym"])}
-        if not name or gear.lower() not in allowed:
-            return (f"Which machine or weights at the {session['gym']} gym do you want to use "
-                    f"instead of {ex['name']}?")
-        weight = _number(change.get("weight_kg"))
-        new = {"name": name, "equipment": gear, "sets": max(1, int(ex["sets"]) - done),
-               "rep_low": ex["rep_low"], "rep_high": ex["rep_high"],
-               "weight_kg": weight if weight is not None else ex["weight_kg"]}
-        if done:
-            ex["sets"] = done
-            session["exercises"].insert(index + 1, new)
-        else:
-            session["exercises"][index] = new
-        self._save(session)
-        lead = (f"Swapped {ex['name']} for {name} today: {new['sets']} x "
-                f"{new['rep_low']}-{new['rep_high']} at {new['weight_kg']:g} kg.")
-        return self._after_change(session, day, index, done, 1 if done else 0, lead)
-
     def _after_change(self, session: dict, day: str, index: int, done: int, shift: int,
                       lead: str) -> str:
         """After an edit at `index` that added (`shift` 1) or removed (-1) an exercise:
@@ -616,22 +478,6 @@ class Router:
     def _save(self, session: dict) -> None:
         self.store.add_plan_session(session["date"], session["gym"], session["kind"],
                                     session["status"], session["exercises"])
-
-    def _change_plan(self, day: str, change: str) -> str:
-        """Never writes a week by itself (Task 14h). With a proposed week waiting and this
-        week's sessions over (Task 14i), ask before revising it; otherwise keep the change as
-        a note, asked about when this week's last session closes (or used by /propose)."""
-        note = self.store.get(PENDING_CHANGE) or ""
-        both = "; ".join(c for c in (note, change) if c)
-        week = self._proposal_week()
-        if week is not None and self._week_finished():
-            self.store.set(PENDING_REVISE, both)
-            return (f"Revise the proposed week {_day_month(week)} to "
-                    f"{_day_month(week + timedelta(days=6))} with: {both}? Reply yes.")
-        self.store.set(PENDING_CHANGE, both)
-        return (f"Noted for next week's plan: {change}. Today's session stays as it is. "
-                "I'll ask about next week once this week's last session is done; "
-                "/propose works any time.")
 
     def _week_finished(self) -> bool:
         """True when this week's last planned session is done or skipped, or its day has
@@ -654,7 +500,6 @@ class Router:
         note = self.store.get(PENDING_CHANGE) or ""
         if not note or not self._week_finished():
             return ""
-        self.store.set(PENDING_REVISE, note)
         week = self._proposal_week()
         if week is not None:
             return (f"\n\nRevise the proposed week {_day_month(week)} to "
@@ -662,19 +507,6 @@ class Router:
         week = self._next_monday()
         return (f"\n\nPlan next week ({_day_month(week)} to "
                 f"{_day_month(week + timedelta(days=6))}) with: {note}? Reply yes.")
-
-    def _pending_revise(self, text: str) -> str | None:
-        """Answer to "Revise the proposed week ...?": yes revises it; anything else drops the
-        question and the message is read as usual."""
-        change = self.store.get(PENDING_REVISE)
-        if not change:
-            return None
-        self.store.set(PENDING_REVISE, "")
-        if text.lower().strip(" .!") not in YES:
-            return None
-        reply = self._propose(change)
-        self.store.set(PENDING_CHANGE, "")
-        return reply
 
     # one exercise at a time: the scheduler shows the first; a completing reply the next
     def _shown(self, day: str) -> tuple[dict, int] | None:
@@ -685,61 +517,6 @@ class Router:
             return None
         index = int(raw)
         return (session, index) if index < len(session["exercises"]) else None
-
-    @staticmethod
-    def _to_shown(raw_sets, shown):
-        """Log reported sets against the exercise now shown, unless the set names another
-        exercise of today's session or is his own exercise (marked "own")."""
-        if shown is None or not isinstance(raw_sets, list):
-            return raw_sets
-        names = {e["name"].strip().lower() for e in shown[0]["exercises"]}
-        current = shown[0]["exercises"][shown[1]]["name"]
-        out = []
-        for s in raw_sets:
-            if (isinstance(s, dict) and s.get("own") is not True
-                    and str(s.get("exercise", "")).strip().lower() not in names):
-                s = {**s, "exercise": current}
-            out.append(s)
-        return out
-
-    def _flow_reply(self, text: str) -> str | None:
-        """Handle next / done / skip while a strength session is on; else None."""
-        word = text.lower().strip(" .!")
-        day = self._today().isoformat()
-        if word in NEXT_WORDS | WARMUP_DONE and self.store.get(WARMUP_KEY + day) == "1":
-            shown = self._shown(day)
-            if shown is not None:  # the warm-up is over: the first exercise follows
-                self._warm_up_over(day)
-                self._open(day)
-                self.exercise_to_send = shown
-                return "Warm-up skipped." if word == "skip" else "Warm-up done."
-        shown = self._shown(day) if word in NEXT_WORDS else None
-        if shown is None:
-            return None
-        session, index = shown
-        self._open(day)
-        name = session["exercises"][index]["name"]
-        passed =self.store.get(PASSED_KEY + day) or ""  # not shown again before the end
-        self.store.set(PASSED_KEY + day, f"{passed}|{name.strip().lower()}")
-        if word == "skip":
-            lead = f"Skipped {name}."
-        elif reports.sets_done(self.store, day, name):
-            lead = reports.format_exercise(self.store, day, name)
-        else:
-            lead = f"Nothing logged for {name}."
-        return self._advance(session, index, day, lead)
-
-    def _after_report(self, session: dict, index: int, day: str) -> str:
-        ex = session["exercises"][index]
-        line = reports.format_exercise(self.store, day, ex["name"])
-        left = int(ex["sets"]) - reports.sets_done(self.store, day, ex["name"])
-        if left > 0:
-            return f"{line}. {left} set{'s' if left != 1 else ''} left."
-        return self._advance(session, index, day, line)
-
-    def _advance(self, session: dict, index: int, day: str, lead: str) -> str:
-        """Move to the next exercise and queue its message, or close the session."""
-        return self._move_to(session, day, index + 1, lead, show=True)
 
     def _next_open(self, session: dict, day: str, start: int) -> int:
         """Index of the first exercise from `start` on, then from the top, with sets still to
@@ -770,46 +547,21 @@ class Router:
         missing = reports.missing(self.store, day, session)
         tail = f"\nMissing: {', '.join(missing)}" if missing else ""
         self.keyboard = FINISH_KEYBOARD
-        return f"{lead}\n\nSession done.{tail}\n\n" + stretch_message(session)
+        label = "the stretch list and the Finish session button (every exercise is done)"
+        self.tail.append((label, f"Session done.{tail}\n\n" + stretch_message(session)))
+        return lead
 
     def pop_exercise(self) -> tuple[dict, int] | None:
         """The (session, index) whose exercise message goes out after the reply (once)."""
         shown, self.exercise_to_send = self.exercise_to_send, None
         return shown
 
-    def _body(self, day: str, weight, waist) -> str:
-        """Store this week's weight and waist; a weight far from the last one is questioned."""
-        weight = _number(weight)
-        waist = _number(waist)
-        if weight is None:
-            return 'I did not catch your weight. Say e.g. "81.6 kg".'
-        last = targets.current_targets(self.store, self._profile()).weight_kg
-        if abs(weight - last) > BODY_JUMP_KG:
-            self.store.set(PENDING_BODY, f"{weight}|{'' if waist is None else waist}")
-            return (f"{weight:g} kg is {abs(weight - last):.1f} kg "
-                    f"{'above' if weight > last else 'below'} your last weight ({last:g} kg). "
-                    "Is that right? Reply yes to save it, or send the right number.")
-        return self._save_body(day, weight, waist)
-
     def _save_body(self, day: str, weight: float, waist: float | None) -> str:
-        self.store.set(PENDING_BODY, "")
         self.store.add_body(day, weight, waist)
         waist_part = "" if waist is None else f", waist {waist:g} cm"
         t = targets.current_targets(self.store, self._profile())
         return (f"Saved: {weight:g} kg{waist_part}. Daily targets now {t.kcal:,} kcal "
                 f"and {t.protein_g} g protein.")
-
-    def _pending_body(self, text: str) -> str | None:
-        """Answer to the question about a far-off weight: yes saves it, anything else drops it."""
-        value = self.store.get(PENDING_BODY)
-        if not value:
-            return None
-        self.store.set(PENDING_BODY, "")
-        if text.lower().strip(" .!") not in YES:
-            return None  # a new message: classify it normally
-        weight, _, waist = value.partition("|")
-        return self._save_body(self._today().isoformat(), float(weight),
-                               float(waist) if waist else None)
 
     def _profile(self):
         return self._profile_path or DEFAULT_PROFILE
@@ -870,25 +622,9 @@ class Router:
         ]
         return "\n".join(lines)
 
-    def _answer(self, text: str, context: str | None = None, jpeg: bytes | None = None) -> str:
-        """The coach's answer; with `jpeg`, the photo he sent this text with is attached."""
-        profile = profile_text(self._profile_path) if self._profile_path else profile_text()
-        context = context or self.context(self._today().isoformat())
-        photo = " (with the attached photo)" if jpeg is not None else ""
-        prompt = f"Profile:\n{profile}\n\n{context}\n\nNew message from Brian{photo}: {text}"
-        system = ("You are a concise gym coach. Answer in at most 5 sentences. General fitness "
-                  "guidance, not medical advice.")
-        if jpeg is not None:
-            return self.claude.text_with_image(self.fast, prompt, jpeg, system=system)
-        return self.claude.text(self.fast, prompt, system=system)
-
 
 def _day_month(d: date) -> str:
     return f"{d.day} {d:%b}"  # "23 Nov"
-
-
-def _norm(text: str) -> str:
-    return " ".join(str(text).lower().split())
 
 
 def _one_line(text: str, limit: int = 300) -> str:

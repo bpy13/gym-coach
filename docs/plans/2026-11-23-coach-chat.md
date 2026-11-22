@@ -125,7 +125,7 @@ Two causes sit under the swap loop besides the design:
     `tests/fakes.py` gains a fake client that plays a scripted list of responses (tool calls,
     then text).
 
-- [ ] **Task 15c: the coach chat with tools replaces the sorting call** (opus) needs: Task 15b
+- [x] **Task 15c: the coach chat with tools replaces the sorting call** (opus) needs: Task 15b
   - Files: create `src/gym_coach/coach.py`; modify `src/gym_coach/router.py`,
     `src/gym_coach/app.py` (trace of tool calls only); rewrite the tests that drive the
     sorting call: `tests/test_router.py`, `tests/test_14h.py`, `tests/test_14i.py`,
