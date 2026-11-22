@@ -20,6 +20,7 @@ PRICES = {
 HAIKU_LONG = (0.50, 2.50)
 LONG_PROMPT_TOKENS = 100_000
 MAX_TOKENS = 4096
+MAX_TOOL_ROUNDS = 6
 
 
 class CeilingReached(Exception):
@@ -121,23 +122,52 @@ class Claude:
                 if attempt == 2:
                     raise LLMError("The model did not return valid JSON twice") from None
 
+    def converse(self, model: str, system: str, messages: list[dict], tools: list[dict],
+                 run_tool, jpeg: bytes | None = None) -> str:
+        """Run a tool-use conversation and return the model's final text.
+
+        `messages` are Anthropic message dicts (the caller's list is not changed); `tools` are
+        Anthropic tool definitions; `run_tool(name, input) -> str` gives each tool's result
+        text. An exception in `run_tool` goes back to the model as an `is_error` result.
+        `jpeg` goes first in the first user message. Each round checks the ceiling, records
+        its cost and adds a trace entry; after MAX_TOOL_ROUNDS rounds it raises LLMError.
+        """
+        convo = [dict(m) for m in messages]
+        if jpeg is not None:
+            first = next(m for m in convo if m["role"] == "user")
+            content = first["content"]
+            if isinstance(content, str):
+                content = [{"type": "text", "text": content}]
+            first["content"] = [_image_block(jpeg), *content]
+        for _ in range(MAX_TOOL_ROUNDS):
+            response, reply = self._round(model, system, list(convo), jpeg is not None,
+                                          tools=tools)
+            calls = [b for b in response.content if getattr(b, "type", "") == "tool_use"]
+            if not calls:
+                return reply
+            convo.append({"role": "assistant",
+                          "content": [_block_dict(b) for b in response.content]})
+            convo.append({"role": "user", "content": [_run(run_tool, b) for b in calls]})
+        raise LLMError(f"The model still called tools after {MAX_TOOL_ROUNDS} rounds")
+
     def _call(self, model: str, prompt: str, system: str, jpeg: bytes | None) -> str:
+        content: list[dict] = [_image_block(jpeg)] if jpeg is not None else []
+        content.append({"type": "text", "text": prompt})
+        messages = [{"role": "user", "content": content}]
+        return self._round(model, system, messages, jpeg is not None)[1]
+
+    def _round(self, model: str, system: str, messages: list[dict], image: bool,
+               tools: list[dict] | None = None):
+        """One API call: ceiling check, cost row, trace entry. Returns (response, text)."""
         if self.month_cost() >= self._ceiling:
             raise CeilingReached()
-        content: list[dict] = []
-        if jpeg is not None:
-            data = base64.b64encode(jpeg).decode("ascii")
-            content.append(
-                {"type": "image",
-                 "source": {"type": "base64", "media_type": "image/jpeg", "data": data}}
-            )
-        content.append({"type": "text", "text": prompt})
-        kwargs = {"system": system} if system else {}
+        kwargs: dict = {"system": system} if system else {}
+        if tools is not None:
+            kwargs["tools"] = tools
         started = time.monotonic()
         try:
             response = self._client.messages.create(
-                model=model, max_tokens=MAX_TOKENS,
-                messages=[{"role": "user", "content": content}], **kwargs,
+                model=model, max_tokens=MAX_TOKENS, messages=messages, **kwargs,
             )
         except Exception as exc:
             self._traced(model, started, error=f"{type(exc).__name__}: {exc}"[:300])
@@ -149,11 +179,42 @@ class Claude:
             cost_usd(model, usage.input_tokens, usage.output_tokens),
         )
         reply = "".join(b.text for b in response.content if getattr(b, "type", "") == "text")
-        self._traced(model, started, image=jpeg is not None, input_tokens=usage.input_tokens,
-                     output_tokens=usage.output_tokens, reply=reply[:2000])
-        return reply
+        extra = {}
+        if tools is not None:
+            extra["tools"] = [b.name for b in response.content
+                              if getattr(b, "type", "") == "tool_use"]
+        self._traced(model, started, image=image, input_tokens=usage.input_tokens,
+                     output_tokens=usage.output_tokens, reply=reply[:2000], **extra)
+        return response, reply
 
     def _traced(self, model: str, started: float, **fields) -> None:
         if self.trace is not None:
             self.trace.append({"model": model,
                                "seconds": round(time.monotonic() - started, 2), **fields})
+
+
+def _image_block(jpeg: bytes) -> dict:
+    data = base64.b64encode(jpeg).decode("ascii")
+    return {"type": "image",
+            "source": {"type": "base64", "media_type": "image/jpeg", "data": data}}
+
+
+def _block_dict(block) -> dict:
+    """An SDK content block (or a fake's) as the plain dict the API accepts back."""
+    if isinstance(block, dict):
+        return block
+    if block.type == "text":
+        return {"type": "text", "text": block.text}
+    if block.type == "tool_use":
+        return {"type": "tool_use", "id": block.id, "name": block.name, "input": block.input}
+    return block.model_dump(exclude_none=True)
+
+
+def _run(run_tool, block) -> dict:
+    """Run one tool call; a failure becomes an error result for the model, not a crash."""
+    try:
+        return {"type": "tool_result", "tool_use_id": block.id,
+                "content": str(run_tool(block.name, block.input))}
+    except Exception as exc:  # noqa: BLE001 - any tool failure goes back to the model
+        return {"type": "tool_result", "tool_use_id": block.id, "is_error": True,
+                "content": str(exc) or type(exc).__name__}

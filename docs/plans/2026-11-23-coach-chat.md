@@ -111,7 +111,7 @@ Two causes sit under the swap loop besides the design:
 
 ## Phase 2 – The model leads the chat (opus)
 
-- [ ] **Task 15b: a tool-use call in the model wrapper** (opus)
+- [x] **Task 15b: a tool-use call in the model wrapper** (opus)
   - Files: modify `src/gym_coach/llm.py`, `tests/test_llm.py`, `tests/fakes.py`.
   - Done when: tests show `Claude.converse(...)` runs a tool loop with a fake client: it
     calls the given Python handler for each `tool_use` block, sends the results back, stops at
