@@ -23,7 +23,16 @@ def gym_for(when: date | datetime) -> str:
 
 
 def _item_name(text: str) -> str:
-    return re.split(r"[:,.]", text, maxsplit=1)[0].strip().lower()
+    """The text up to the first `:`, `,` or `.` that is outside brackets, lower case."""
+    depth = 0
+    for pos, ch in enumerate(text):
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth = max(0, depth - 1)
+        elif ch in ":,." and depth == 0:
+            return text[:pos].strip().lower()
+    return text.strip().lower()
 
 
 def equipment_for(gym: str, path: Path | str = DEFAULT_EQUIPMENT) -> set[str]:

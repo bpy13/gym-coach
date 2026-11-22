@@ -87,7 +87,7 @@ Two causes sit under the swap loop besides the design:
 
 ## Phase 1 – Equipment names (sonnet)
 
-- [ ] **Task 15a: equipment names read whole; the combined machine is a lying leg curl** `[parallel-ok]`
+- [x] **Task 15a: equipment names read whole; the combined machine is a lying leg curl** `[parallel-ok]`
   - Files: modify `src/gym_coach/context.py` (`_item_name`), `tests/test_context.py`,
     `tests/test_illustrations.py` (the `"lat pulldown with low row (one tower"` fixture
     string), `data/equipment.md` (not committed); create

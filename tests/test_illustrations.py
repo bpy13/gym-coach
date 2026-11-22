@@ -345,7 +345,20 @@ def test_pulldown_and_low_row_towers_use_the_cable_pictures(tmp_path):
     i = Illustrations(tmp_path / "c", http_get=lambda url: json.dumps(cat).encode())
     pool = i.allowed({"dual adjustable cable machine", "lat pulldown"}, machines=True)
     assert i.match("Lat pulldown", "lat pulldown", pool) == "Wide"
-    assert i.match("Seated low row", "lat pulldown with low row (one tower", pool) == "Seated_Rows"
+    assert i.match("Seated low row", "lat pulldown with low row (one tower, high bar and low handle)", pool) == "Seated_Rows"
     assert i.fits("Wide", "lat pulldown", "Lat pulldown")
     assert i.fits("Iso_Row", "lat pulldown with low row")  # still a machine too
     assert not i.fits("Wide", "chest press")
+
+
+def test_lying_leg_curl_matches_the_combined_machine(tmp_path):
+    """Task 15a: the parents' combined machine is a seated extension with a lying curl."""
+    def entry(i, name):
+        return {"id": i, "name": name, "equipment": "machine", "level": "beginner",
+                "category": "strength", "images": [], "instructions": []}
+    cat = [entry("Lying_Leg_Curls", "Lying Leg Curls"), entry("Seated_Leg_Curl", "Seated Leg Curl"),
+           entry("Leg_Extensions", "Leg Extensions")]
+    i = Illustrations(tmp_path / "c", http_get=lambda url: json.dumps(cat).encode())
+    pool = i.allowed({"x"}, machines=True)
+    machine = "leg extension (seated) and lying leg curl"
+    assert i.match("Lying leg curl", machine, pool) == "Lying_Leg_Curls"

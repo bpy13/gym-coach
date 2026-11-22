@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime
 from pathlib import Path
 
-from gym_coach.context import equipment_for, gym_for, profile_text
+from gym_coach.context import equipment_for, equipment_photo_ids, gym_for, profile_text
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 EQUIPMENT = EXAMPLES / "equipment.md"
@@ -54,3 +54,19 @@ def test_unknown_gym_rejected():
 
 def test_profile_text():
     assert "Goal: build muscle" in profile_text(EXAMPLES / "profile.md")
+
+
+def test_item_name_keeps_bracketed_commas(tmp_path):
+    """Task 15a: a comma inside brackets does not cut the name."""
+    f = tmp_path / "equipment.md"
+    f.write_text(
+        "## Parents' gym\n"
+        "- Lat pulldown with low row (one tower, high bar and low handle): seen (IMG_1)\n"
+        "- Leg extension (seated) and lying leg curl, one combined machine: seen (IMG_2)\n",
+        encoding="utf-8")
+    items = equipment_for("parents", f)
+    assert "lat pulldown with low row (one tower, high bar and low handle)" in items
+    assert "leg extension (seated) and lying leg curl" in items
+    assert not any(i.endswith("(one tower") for i in items)
+    ids = equipment_photo_ids("parents", f)
+    assert ids["lat pulldown with low row (one tower, high bar and low handle)"] == "IMG_1"
