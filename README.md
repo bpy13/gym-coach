@@ -54,7 +54,8 @@ It answers only the one Telegram account you allow.
   leading the chat with tools) logs your sets ("35 for 12", "3rd set 40 x 10"), fixes or removes
   a set, swaps or drops an exercise of today's session, changes a planned weight, shows the
   next exercise ("next", "done", "skip"), logs cardio ("jogged 45 min, 6 km", with minutes and
-  any distance or heart rate; it marks the day done), logs meals and body weight, keeps a change for a future
+  any distance or heart rate; it marks the day done; numbers you add later, such as the
+  distance, go onto the same entry), logs meals and body weight, keeps a change for a future
   week, and finishes the workout. It answers form questions and always says the numbers it
   logged. The code, not the model, enforces the hard rules: a swap needs equipment on that
   day's gym list, numbers must be above 0 and exercise names must be in today's session (your

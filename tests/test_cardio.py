@@ -89,3 +89,34 @@ def test_evening_check_closes_a_cardio_day(store):
     store.add_cardio(DAY, "jogging", 20)
     assert reports.mark_done(store, DAY) is True
     assert store.plan_session(DAY)["status"] == "done"
+
+
+def test_fix_cardio_adds_the_distance_to_the_saved_entry(store, equipment):
+    store.add_cardio(DAY, "jogging", 53)
+    call = tool_use("fix_cardio", {"distance_km": 6.5})
+    router, fake = make(store, equipment, [[call], "6.5 km added."], clock=MON)
+    router.handle("about 6.5 km")
+    rows = store.cardio_on(DAY)
+    assert [(r["minutes"], r["distance_km"], r["avg_hr"]) for r in rows] == [(53, 6.5, None)]
+    assert "Cardio now: jogging 53 min, 6.5 km." in results(fake.calls[1])[0]["content"]
+
+
+def test_fix_cardio_changes_only_the_last_entry(store, equipment):
+    store.add_cardio(DAY, "jogging", 20, avg_hr=125)
+    store.add_cardio(DAY, "cycling", 30, avg_hr=120)
+    router, _ = make(store, equipment, [[tool_use("fix_cardio", {"minutes": 35})], "Ok."],
+                     clock=MON)
+    router.handle("cycling was 35 min")
+    assert [(r["activity"], r["minutes"], r["avg_hr"]) for r in store.cardio_on(DAY)] == [
+        ("jogging", 20, 125), ("cycling", 35, 120)]
+
+
+@pytest.mark.parametrize("data, saved", [({"distance_km": 5}, False), ({}, True),
+                                         ({"minutes": -1}, True)])
+def test_fix_cardio_is_refused_without_an_entry_or_numbers(store, equipment, data, saved):
+    if saved:
+        store.add_cardio(DAY, "jogging", 30)
+    router, fake = make(store, equipment, [[tool_use("fix_cardio", data)], "Hm."], clock=MON)
+    router.handle("fix it")
+    assert results(fake.calls[1])[0]["is_error"] is True
+    assert [r["minutes"] for r in store.cardio_on(DAY)] == ([30] if saved else [])

@@ -26,7 +26,8 @@ personal trainer standing next to him: warm, direct, brief.
 - A short correction ("x12, typo", "that was 37.5") fixes the last set he reported: use fix_set.
 - Cardio he did (jog, run, bike...): save it with log_cardio, with the minutes and any
   distance or heart rate he gives. If he gave no time, ask once how many minutes; when he
-  says he is done with cardio, log it before you call finish_workout.
+  says he is done with cardio, log it before you call finish_workout. Numbers he adds or
+  corrects for cardio already saved today go through fix_cardio, never a second log_cardio.
 - "next", "done" or "skip" during the session means show_exercise with "next"; after the
   warm-up it ends the warm-up and the first exercise follows.
 - When a tool refuses, read why and fix your call with one of the valid choices it lists.
@@ -92,6 +93,10 @@ TOOLS = [
            "distance_km": {"type": "number", "description": "km, if he says"},
            "avg_hr": {"type": "integer", "description": "average heart rate, if he says"}},
           ["activity", "minutes"]),
+    _tool("fix_cardio", "Change or add the minutes, distance or heart rate of today's last "
+          "cardio entry (e.g. he gives the distance after it was saved).",
+          {"minutes": {"type": "number"}, "distance_km": {"type": "number"},
+           "avg_hr": {"type": "integer"}}),
     _tool("finish_workout", "Close today's workout; the code sends the summary."),
     _tool("skip_today", "He skips today's whole session."),
     _tool("log_meal", "Estimate and save a meal he ate.",
@@ -373,6 +378,23 @@ class Coach:
         reports.mark_done(r.store, self.day)
         row = r.store.cardio_on(self.day)[-1]
         return f"Saved cardio: {reports.cardio_text(row)}."
+
+    def t_fix_cardio(self, data: dict) -> str:
+        rows = self.r.store.cardio_on(self.day)
+        if not rows:
+            raise ToolRefused("No cardio is saved today; use log_cardio.")
+        minutes = _optional(data, "minutes")
+        distance = _optional(data, "distance_km")
+        hr = None if data.get("avg_hr") is None else _positive_int(data["avg_hr"], "avg_hr")
+        if minutes is None and distance is None and hr is None:
+            raise ToolRefused("Give minutes, distance_km or avg_hr.")
+        row = rows[-1]
+        self.r.store.update_cardio(
+            row["id"], row["minutes"] if minutes is None else minutes,
+            row["distance_km"] if distance is None else distance,
+            row["avg_hr"] if hr is None else hr)
+        row = self.r.store.cardio_on(self.day)[-1]
+        return f"Cardio now: {reports.cardio_text(row)}."
 
     def t_finish_workout(self, data: dict) -> str:
         self.r.tail.append(("the summary of today's workout", self.r._end(self.day)))

@@ -129,6 +129,10 @@ class Store:
             (date, activity, minutes, distance_km, avg_hr, saved_at),
         )
 
+    def update_cardio(self, row_id, minutes, distance_km, avg_hr) -> None:
+        self._run("UPDATE cardio SET minutes=?, distance_km=?, avg_hr=? WHERE id=?",
+                  (minutes, distance_km, avg_hr, row_id))
+
     def cardio_on(self, date) -> list[dict]:
         return self._rows("SELECT * FROM cardio WHERE date=? ORDER BY id", (date,))
 

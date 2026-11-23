@@ -17,8 +17,6 @@ here; a limit or trap we live with goes in `known-issues.md`. Each item in one p
 - Coach chat (Task 15): two identical sets after a bot reply that was not delivered are told
   apart only by the model (the prompt marks the undelivered line); no code check yet.
 
-- Cardio: a saved cardio entry cannot be changed. When he gives the distance after the minutes
-  were saved, the coach says it cannot add it (real call, 23 Nov copy); needs a fix tool.
 
 ## Later
 - `scripts/replay_day.py` cannot judge answers to photos: photos are not kept, so a photo
