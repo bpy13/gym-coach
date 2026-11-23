@@ -24,6 +24,9 @@ personal trainer standing next to him: warm, direct, brief.
   session. A set of an exercise not in today's session is his own exercise: log it with
   "own": true. Use today's exercise names and the gym's equipment names exactly as listed.
 - A short correction ("x12, typo", "that was 37.5") fixes the last set he reported: use fix_set.
+- Cardio he did (jog, run, bike...): save it with log_cardio, with the minutes and any
+  distance or heart rate he gives. If he gave no time, ask once how many minutes; when he
+  says he is done with cardio, log it before you call finish_workout.
 - "next", "done" or "skip" during the session means show_exercise with "next"; after the
   warm-up it ends the warm-up and the first exercise follows.
 - When a tool refuses, read why and fix your call with one of the valid choices it lists.
@@ -82,6 +85,13 @@ TOOLS = [
           ["exercise"]),
     _tool("set_weight", "Change the planned weight of an exercise for TODAY.",
           {"exercise": _EX, "weight_kg": _KG}, ["exercise", "weight_kg"]),
+    _tool("log_cardio", "Save cardio he did today (jog, run, bike, rower...); this marks "
+          "today's session done.",
+          {"activity": {"type": "string", "description": "e.g. jogging, cycling"},
+           "minutes": {"type": "number", "description": "how long, more than 0"},
+           "distance_km": {"type": "number", "description": "km, if he says"},
+           "avg_hr": {"type": "integer", "description": "average heart rate, if he says"}},
+          ["activity", "minutes"]),
     _tool("finish_workout", "Close today's workout; the code sends the summary."),
     _tool("skip_today", "He skips today's whole session."),
     _tool("log_meal", "Estimate and save a meal he ate.",
@@ -350,9 +360,23 @@ class Coach:
         r._save(session)
         return f"{ex['name']} today: {weight:g} kg." + far
 
+    def t_log_cardio(self, data: dict) -> str:
+        activity = str(data.get("activity") or "").strip()
+        if not activity:
+            raise ToolRefused("Give the activity, e.g. jogging.")
+        minutes = _positive(data.get("minutes"), "minutes")
+        distance = _optional(data, "distance_km")
+        hr = None if data.get("avg_hr") is None else _positive_int(data["avg_hr"], "avg_hr")
+        r = self.r
+        now = r._now().astimezone(HK).isoformat(timespec="seconds")
+        r.store.add_cardio(self.day, activity, minutes, distance, hr, now)
+        reports.mark_done(r.store, self.day)
+        row = r.store.cardio_on(self.day)[-1]
+        return f"Saved cardio: {reports.cardio_text(row)}."
+
     def t_finish_workout(self, data: dict) -> str:
         self.r.tail.append(("the summary of today's workout", self.r._end(self.day)))
-        return "Workout closed (the day is marked done when sets are logged)."
+        return "Workout closed (the day is marked done when sets or cardio are logged)."
 
     # the rest
     def t_skip_today(self, data: dict) -> str:

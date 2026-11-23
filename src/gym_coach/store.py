@@ -1,4 +1,4 @@
-"""SQLite record storage for plans, logged sets, meals, body numbers, API calls, kv."""
+"""SQLite record storage for plans, logged sets, cardio, meals, body numbers, API calls, kv."""
 
 from __future__ import annotations
 
@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS plan_sessions (
 CREATE TABLE IF NOT EXISTS logged_sets (
     id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, exercise TEXT NOT NULL,
     set_no INTEGER NOT NULL, weight_kg REAL, reps INTEGER, effort TEXT, saved_at TEXT);
+CREATE TABLE IF NOT EXISTS cardio (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, activity TEXT NOT NULL,
+    minutes REAL NOT NULL, distance_km REAL, avg_hr INTEGER, saved_at TEXT);
 CREATE TABLE IF NOT EXISTS meals (
     id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL,
     description TEXT NOT NULL, kcal REAL NOT NULL, protein_g REAL NOT NULL);
@@ -116,6 +119,18 @@ class Store:
 
     def clear_logged_sets(self, date) -> None:
         self._run("DELETE FROM logged_sets WHERE date=?", (date,))
+
+    # cardio
+    def add_cardio(self, date, activity, minutes, distance_km=None, avg_hr=None,
+                   saved_at=None) -> None:
+        self._run(
+            "INSERT INTO cardio (date, activity, minutes, distance_km, avg_hr, saved_at)"
+            " VALUES (?,?,?,?,?,?)",
+            (date, activity, minutes, distance_km, avg_hr, saved_at),
+        )
+
+    def cardio_on(self, date) -> list[dict]:
+        return self._rows("SELECT * FROM cardio WHERE date=? ORDER BY id", (date,))
 
     # meals
     def add_meal(self, timestamp, description, kcal, protein_g) -> None:

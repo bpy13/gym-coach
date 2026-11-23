@@ -56,9 +56,10 @@ def remove(store, day: str, row_id: int) -> None:
 
 
 def mark_done(store, day: str) -> bool:
-    """Mark a proposed or approved day `done` if any set is logged on it."""
+    """Mark a proposed or approved day `done` if any set or cardio is logged on it."""
     session = store.plan_session(day)
-    if session and session["status"] in ("proposed", "approved") and store.logged_sets(day):
+    if (session and session["status"] in ("proposed", "approved")
+            and (store.logged_sets(day) or store.cardio_on(day))):
         store.set_plan_status(day, "done")
         return True
     return False
@@ -85,13 +86,26 @@ def correct(store, day: str, raw_sets) -> list[dict]:
 
 
 def format_log(store, day: str, header: str = "Logged:") -> str:
-    """The day's sets, one line per exercise, e.g. 'Chest press: 35 kg x 10, 10, 8'."""
+    """The day's sets, one line per exercise, e.g. 'Chest press: 35 kg x 10, 10, 8', then
+    one line per cardio entry, e.g. 'Cardio: jogging 53 min, 7.2 km, avg 131 bpm'."""
     groups: dict[str, list[dict]] = {}
     for r in store.logged_sets(day):
         groups.setdefault(r["exercise"], []).append(r)
-    if not groups:
+    lines = [f"{name}: {sets_text(rows)}" for name, rows in groups.items()]
+    lines += [f"Cardio: {cardio_text(c)}" for c in store.cardio_on(day)]
+    if not lines:
         return "Nothing logged yet today."
-    return "\n".join([header] + [f"{name}: {sets_text(rows)}" for name, rows in groups.items()])
+    return "\n".join([header] + lines)
+
+
+def cardio_text(row: dict) -> str:
+    """One cardio entry, e.g. 'jogging 53 min, 7.2 km, avg 131 bpm'."""
+    parts = [f"{row['activity']} {row['minutes']:g} min"]
+    if row.get("distance_km"):
+        parts.append(f"{row['distance_km']:g} km")
+    if row.get("avg_hr"):
+        parts.append(f"avg {row['avg_hr']} bpm")
+    return ", ".join(parts)
 
 
 def sets_text(rows: list[dict]) -> str:

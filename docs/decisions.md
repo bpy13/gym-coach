@@ -144,3 +144,9 @@ setting or a small change.
 - 2026-11-23, Brian: the parents' combined machine is a seated leg extension with a lying leg
   curl, not a seated leg curl (Task 15a). (Brian, 22 Nov chat: "it is a lying leg curl / seated
   leg extension, which you have mistakenly identified as seated leg curl")
+- 2026-11-23, Brian: the bot logs cardio. A `log_cardio` tool saves the activity, minutes and,
+  when he gives them, distance and average heart rate in a new `cardio` table; a logged cardio
+  entry marks the day done and shows in the summary. The fields and marking the day done at
+  once are the builder's call; Brian may change them. (Brian, 2026-11-23: "I thought the app
+  would log cardio session", then "Yes, add it" to adding cardio logging and saving the
+  23 Nov jog.)
