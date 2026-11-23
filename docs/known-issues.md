@@ -34,7 +34,8 @@
   today's last 12 lines and today's session. Limits: a reply that never reached Telegram goes
   out "(late)" only with the next send of the same day; a report sent again with the same text
   after an undelivered reply is not logged twice, so two identical real sets in a row while
-  Telegram is down need the second one sent again after the "Already logged" reply. A swap
+  Telegram is down need the second one sent again after the "Already logged" reply
+  (replaced by Task 15: the "Already logged" repeat is gone, see the Task 15 entry). A swap
   needs equipment exactly on that day's gym list; the new exercise has no picture until a
   proposal gives it one.
 - Task 14h (2026-11-17): each incoming message gets a row in the `trace` table (what the bot
@@ -43,10 +44,12 @@
   `scripts\show_chat.py --day YYYY-MM-DD` prints a day in time order. The trace does not yet
   record what a message changed (sets rewritten, the session pointer); Brian holds that.
   Limits: every set report goes to the model (reading "35 12" without it was removed the same
-  day, Brian: "quite risky, no need"). A photo without a caption that the model calls "not a meal"
+  day, Brian: "quite risky, no need"; replaced by Task 15: the coach reads it with tools). A photo without a caption that the model calls "not a meal"
   stores nothing and the bot asks what it is; the image is not kept, so he sends it again with
   a caption. A future-week change asks "Revise the proposed week ...? Reply yes." only when no
   strength session is open today; any reply other than yes drops the question.
+  (Replaced by Task 15: the "yes" follow-up is answered through the coach, whose
+  `revise_proposed_week` and `note_plan_change` tools do it.)
 - Task 14i (2026-11-17): a workout opens on "start", or by itself on a set report, a
   correction, a missing-sets message, a change to today's session, "next/done/skip", or a
   question the sorting call marks as about today's workout. It closes when no exercise has
@@ -56,7 +59,9 @@
   A week change waits until this week's last planned session is done, skipped or past; the
   kept note is asked about when that session closes. `/propose` works any time. A
   missing-sets message makes one more Haiku call that compares his claim with the chat: it
-  adds or fixes sets (never deletes) and says what changed, or asks whether he misread. Limits:
+  adds or fixes sets (never deletes) and says what changed, or asks whether he misread
+  (replaced by Task 15: that extra check call is gone; the coach has the chat and the log
+  tools, and the sorting call that opened the workout is replaced too). Limits:
   added sets are checked only by exercise name (a name not in today's session or log is
   skipped); a very long workout grows each call (about 1,900 tokens at message 40).
 - Task 14j (2026-11-17): the 07:00 message is the list, then the warm-up (no first exercise);
@@ -67,3 +72,14 @@
   or "end" close the workout, send the summary and remove the button. Limits: the 21:00 close
   is silent, so the button stays on his phone until his next message that closes; a reply
   that went out "(late)" loses its button.
+- Task 15 (2026-11-23): the coach chat replaced the sorting call. One fast-model conversation
+  per message leads the chat with 15 tools (log, fix and remove sets, show/swap/drop an exercise,
+  set a weight, finish, skip, meals, body weight, plan notes). The model decides; the code
+  enforces equipment on that day's gym list, positive numbers and exercise names in today's
+  session, and a refused call goes back to the model with the valid choices. When a failure
+  comes after a tool ran, the reply lists what was saved (never "try again"). Cost measured in
+  the replay of Sunday 22 Nov: median about US$0.001 per message, about US$0.06 for the 52
+  messages. Equipment names now keep commas inside brackets. Limits: a question with no tool
+  call does not open the workout; two identical sets after an undelivered reply rely on the
+  model (the prompt says to check the log); the replay cannot judge photo answers (photos are
+  not kept).

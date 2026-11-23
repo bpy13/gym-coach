@@ -171,7 +171,7 @@ Two causes sit under the swap loop besides the design:
     - The trace's "understood" holds the tool calls and their first 200 characters of result,
       as JSON.
 
-- [ ] **Task 15d: replay Sunday through the new coach** (checkpoint) needs: Task 15a, Task 15c
+- [x] **Task 15d: replay Sunday through the new coach** (checkpoint) needs: Task 15a, Task 15c
   - Files: create `scripts/replay_day.py`; output `data/replay/2026-11-22.txt` (ignored).
   - Done when: `conda run -n gym-coach python scripts/replay_day.py --day 2026-11-22` copies
     `data/gym.db` to the scratchpad, resets that day (logged sets removed; the session as sent
@@ -187,7 +187,7 @@ Two causes sit under the swap loop besides the design:
     to #165 once against the session as stored before Task 15a (the stored name "Seated leg
     curl" on the old machine name).
 
-- [ ] **Task 15e: run it live and update the docs** needs: Task 15d (Brian's verdict)
+- [x] **Task 15e: run it live and update the docs** needs: Task 15d (Brian's verdict)
   - Files: modify `README.md`, `docs/known-issues.md`, `docs/decisions.md` (Brian's line
     from 23 Nov, written by the main session), `docs/open-items.md`.
   - Done when: the bot restarts through its scheduled task (`Stop-ScheduledTask` /

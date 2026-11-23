@@ -50,11 +50,27 @@ It answers only the one Telegram account you allow.
   exercise follows. Send "start" when you begin (the first set or a question about today's
   exercises also starts it). After the last exercise the bot lists stretches and shows a
   "Finish session" button; tap it (or send "finish" or "end") for the summary. A workout you
-  never finish closes at 21:00. While it runs, the bot reads each message with the whole workout's chat in view. If
-  you say sets are missing ("leg curl and row now missing"), the bot checks the chat: it saves
-  or fixes the sets you reported and says what it changed, or shows the log and asks whether
-  you misread. A change to next week is kept until this week's last session is done; then the
-  bot asks. `/propose` works any time.
+  never finish closes at 21:00. Chatting: talk in plain words, there is no format to learn. The coach (a fast model
+  leading the chat with tools) logs your sets ("35 for 12", "3rd set 40 x 10"), fixes or removes
+  a set, swaps or drops an exercise of today's session, changes a planned weight, shows the
+  next exercise ("next", "done", "skip"), logs meals and body weight, keeps a change for a future
+  week, and finishes the workout. It answers form questions and always says the numbers it
+  logged. The code, not the model, enforces the hard rules: a swap needs equipment on that
+  day's gym list, numbers must be above 0 and exercise names must be in today's session (your
+  own extra exercise is logged as such). If a call fails after something was saved, the reply
+  says what is saved. A change to next week is kept until this week's last session is done;
+  then the bot asks.
+- What stays a command or button: `/start`, `/today`, `/propose`, `/progress`, `/cost`, the
+  word "start" when you begin, and the "Finish session" button (the coach also finishes on
+  "finish" or "end").
+
+- Replay a day: `conda run -n gym-coach python scripts\replay_day.py --day 2026-11-22` feeds
+  that day's messages from the chat table through the current coach and writes what it said,
+  its tool calls and the cost per message to `data\replay\<day>.txt`. It makes real API calls
+  and spends real money (about US$0.06 for a 52-message day): it checks this month's cost plus
+  `--max-cost` (default 0.50) against the monthly ceiling first and stops when the run passes
+  `--max-cost`. It works on a copy of `data\gym.db` in `--work-dir` (system temp by default);
+  the live database is only read. Photos are not kept, so it cannot judge photo answers.
 
 - See a day's chat: `conda run -n gym-coach python scripts\show_chat.py --day 2026-11-17`
   prints the chat with what the bot understood, its model calls and seconds, the exercise
