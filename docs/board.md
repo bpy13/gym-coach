@@ -1,13 +1,24 @@
 # Board: gym-coach
 
 ## Workers
-- slot 1: Task 14k, building
 
 ## Ready to build
 
 ## Waiting on Brian
 
 ## Done and carried over
+- Task 14k, planned weights from what he last lifted (`store.py recent_sets`, `planner.py`
+  history and weight-change lines, `prompts.py`, `router.py` last-time line, `coach.py`
+  `past_sets` tool): done 2026-11-24 (slot 1). The week proposal's prompt lists, per exercise
+  logged in the last 8 weeks, its last 3 days (weight x reps per set, the plan's rep range);
+  the model starts from the last top weight and raises, keeps or lowers it by the rep-range
+  rule; the proposal message adds one line per changed weight with why. During a workout
+  each exercise shows "last: 35 kg x 10, 10, 8 on 19 Nov"; the coach can look up any
+  exercise's earlier days. A proposal over a week with an approved or done session is
+  refused. 347 tests pass (335 before; 12 new in `tests/test_14k.py`), ruff clean. On a copy
+  of the real db the history block lists 18 exercises (17-22 Nov). Bot restarted through
+  `gym-coach-bot` at 18:02:05, "bot started", no error after for 3 minutes. Paid calls:
+  none. Brian looks at the next proposed week.
 - Task 14j, warm-up first, stretching last, a "Finish session" button (`messages.py`
   `WARM_UP` and `STRETCHES`, `scheduler.py`, `router.py`, `app.py`, `telegram.py`
   `reply_markup`): code on main 2026-11-17, not ticked; waits on a bot restart and the next
