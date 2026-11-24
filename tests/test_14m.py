@@ -59,6 +59,15 @@ def test_dumbbell_bench_lowered_weight_is_struggling():
     assert (label, why, at) == ("struggling", "you lowered the weight", 12)
 
 
+def test_last_set_at_the_top_weight_reaching_the_top_wins_over_a_fall():
+    # 17 Nov lying leg curl (made-up range 8-12): 21 x 15, 12, then 28 x 12
+    assert weights.read_sets(sets((21, 15), (21, 12), (28, 12)), (8, 12))[0] == "too easy"
+    assert weights.read_sets(sets((21, 15), (21, 12), (21, 12)), (8, 12))[0] == "too easy"
+    # the last set under the top, or not at the top weight: struggling as before
+    assert weights.read_sets(sets((12.5, 15), (12.5, 12), (12.5, 10)), (8, 12))[0] == "struggling"
+    assert weights.read_sets(sets((12, 12), (10, 15)), (8, 12))[0] == "struggling"
+
+
 def test_the_other_rules():
     assert weights.read_sets(sets((30, 12), (30, 11), (30, 10)), (8, 12))[0] == "steady"  # 2
     assert weights.read_sets(sets((30, 10), (30, 7)), (8, 12))[:2] == ("struggling",

@@ -129,8 +129,8 @@ def test_chest_press_finds_the_machine_chest_press_sets(nov17):
     assert got["weight_kg"] == 35  # 21, 28, 28 x 12: one 7 kg step up from 28
     assert got["note"] == ("last time 28 kg felt easy: 21 kg x 12; 28 kg x 12, 12 on 17 Nov "
                            "(Machine chest press)")
-    # 21 x 15, 12, 12: reps fell 3, so it stays (Task 14m)
-    assert weight(nov17, ex("Shoulder press", 15, "shoulder press"))["weight_kg"] == 21
+    # 21 x 15, 12, 12: the last set at the top weight reached 12, too easy (Task 14m)
+    assert weight(nov17, ex("Shoulder press", 15, "shoulder press"))["weight_kg"] == 28
 
 
 def test_a_shared_machine_needs_a_shared_name_word(store):

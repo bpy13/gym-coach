@@ -182,6 +182,8 @@ def read_sets(sets: list[dict], rng: tuple[int, int] | None) -> tuple[str, str, 
     """How one day's sets of an exercise went, in logged order (Task 14m; thresholds are the
     orchestrator's call, 2026-11-24): (label, why, the weight where it went wrong or None).
 
+    First, TOO_EASY when the last set was at the day's top weight and reached the top of the
+    range (it wins over a fall of reps before it). Then
     STRUGGLING: reps fell from set to set at the same weight by FELL_REPS or more in total,
     or he lowered the weight during the day, or a set ended under the bottom of the range.
     TOO_EASY: he raised the weight and still reached the top of the range on the last set,
@@ -189,8 +191,13 @@ def read_sets(sets: list[dict], rng: tuple[int, int] | None) -> tuple[str, str, 
     rows = [r for r in sets if r.get("reps") is not None]
     if not rows:
         return STEADY, "", None
+    known = [r["weight_kg"] for r in rows if r["weight_kg"] is not None]
+    if rng and rows[-1]["reps"] >= rng[1] and rows[-1]["weight_kg"] == (
+            max(known) if known else None):
+        # the last set at the day's top weight reached the top: too easy wins (2026-11-24)
+        return TOO_EASY, "felt easy", None
     pairs = list(pairwise(rows))
-    same = [(a, b) for a, b in pairs if a["weight_kg"] == b["weight_kg"]]
+    same =[(a, b) for a, b in pairs if a["weight_kg"] == b["weight_kg"]]
     fell = sum(max(0, a["reps"] - b["reps"]) for a, b in same)
     if fell >= FELL_REPS:
         at = max((a["weight_kg"] for a, b in same if a["reps"] > b["reps"]
