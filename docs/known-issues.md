@@ -83,3 +83,10 @@
   call does not open the workout; two identical sets after an undelivered reply rely on the
   model (the prompt says to check the log); the replay cannot judge photo answers (photos are
   not kept).
+- Task 14n (2026-11-24): past sets reach the coach one per set ("17 Nov, 3 sets: set 1 21 kg
+  x 15, set 2 28 kg x 12, set 3 28 kg x 15"); the grouped form ("21 kg x 15; 28 kg x 12, 15")
+  was read as two sets. His effort word is read by keywords (`weights.effort_kind`: "barely",
+  "hard", "not easy" and the like are hard; "easy", "light" are easy; anything else is no
+  word); the last set with a word decides. A word the list misses counts as none, so the rep
+  rule applies. `fix_past_set` changes an earlier day only after he names the set and the
+  numbers (prompt rule, not code-checked); an added or removed set renumbers that day's sets.
