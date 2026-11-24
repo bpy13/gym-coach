@@ -14,8 +14,13 @@ You give general fitness guidance, not medical advice. Fixed rules:
 - Cardio at a heart rate of about 130 bpm on Monday, Wednesday and Friday (home gym), and on no
   other day. Saturday has no session.
 - Full-body strength sessions: 5 to 7 exercises, 3 sets each, rep range 8 to 12.
-- First-week weights are light (the first week is a test of working weights). Dumbbell weights
-  are in 2 kg steps. Machines use whole pin steps.
+- Weights: for an exercise in "What he lifted before", start from his last logged weight (the
+  heaviest set of his last day). Raise it by the smallest step the equipment allows (dumbbells
+  2 kg, a machine one pin step, a barbell 2.5 kg) only when he reached the top of the rep range
+  on every set last time; keep it when he did not; lower it one step when any set missed the
+  bottom of the range. An exercise with no history gets a light weight from the profile (a test
+  of working weights). Dumbbell weights are in 2 kg steps. Machines use whole pin steps.
+  Keep the exercise names of his history when you plan the same exercise again.
 - Weekdays are at the home gym, Saturday and Sunday at the parents' gym. Use ONLY equipment
   from that day's gym list, and write the equipment name exactly as it appears in the list.
 - For dumbbell, cable and barbell exercises you may add "illustration": an id from that gym's
@@ -38,7 +43,8 @@ Answer with JSON only, in this shape:
 def plan_prompt(profile: str, home: set[str], parents: set[str], dates: list[str],
                 previous: list[dict] | None = None, change: str | None = None,
                 error: str | None = None,
-                illustrations: dict[str, dict[str, str]] | None = None) -> str:
+                illustrations: dict[str, dict[str, str]] | None = None,
+                history: str | None = None) -> str:
     parts = [
         "Profile:\n" + profile,
         "Home gym equipment (weekdays):\n" + "\n".join(f"- {e}" for e in sorted(home)),
@@ -49,6 +55,8 @@ def plan_prompt(profile: str, home: set[str], parents: set[str], dates: list[str
         if illustrations and illustrations.get(gym):
             parts.append(f"{label} gym illustration ids (id: exercise):\n" + "\n".join(
                 f"{i}: {n}" for i, n in illustrations[gym].items()))
+    if history:
+        parts.append(history)
     if previous:
         parts.append("Current proposal (JSON): " + str(previous))
     if change:

@@ -33,6 +33,9 @@ personal trainer standing next to him: warm, direct, brief.
 - When a tool refuses, read why and fix your call with one of the valid choices it lists.
 - Never ask the same question twice: when his answer is still unclear, make the sensible
   choice, say what you did, and let him correct it.
+- "last:" after an exercise of today's session is what he did the last time he did it: use it
+  when he asks what he lifted before or which weight to take. For earlier days or another
+  exercise, call past_sets.
 - Say plainly when a photo is unclear.
 - Speak as his coach. Never mention tools, the code, "the system", queues or set numbering
   mix-ups; if something went wrong, just say what is logged now.
@@ -45,6 +48,7 @@ personal trainer standing next to him: warm, direct, brief.
   summary itself; tool results say what was queued. Never repeat those, just refer to them.
 - You give general fitness guidance, not medical advice. English only, weights in kg."""
 
+READ_ONLY = {"past_sets"}  # tools that change nothing
 BODY_JUMP_KG = 5.0  # kg from his last weight: log_body asks first
 
 _EX = {"type": "string", "description": "Exercise name exactly as in today's session"}
@@ -117,6 +121,9 @@ TOOLS = [
           "once this week's sessions are over; he said yes to it).",
           {"change": {"type": "string"}}, ["change"]),
     _tool("approve_plan", "He approves the proposed week."),
+    _tool("past_sets", "What he did in an exercise on its last 3 days before today (weight "
+          "and reps of each set), e.g. when he asks what he lifted last time.",
+          {"exercise": {"type": "string", "description": "the exercise name"}}, ["exercise"]),
 ]
 
 
@@ -208,7 +215,7 @@ class Coach:
             self.calls.append({"tool": name, "input": data, "result": f"{kind}: {exc}"[:200]})
             raise
         self.last_result = result
-        if _changed(result):
+        if name not in READ_ONLY and _changed(result):
             self.done.append(result)
         self.calls.append({"tool": name, "input": data, "result": result[:200]})
         notes = []
@@ -471,3 +478,13 @@ class Coach:
 
     def t_approve_plan(self, data: dict) -> str:
         return self.r._approve()
+
+    def t_past_sets(self, data: dict) -> str:
+        past = self.r.store.recent_sets(self.day)
+        wanted = key(data.get("exercise"))
+        days = next((v for k, v in past.items() if key(k) == wanted), None)
+        if not days:
+            have = ", ".join(v[0]["exercise"] for v in past.values()) or "none"
+            return (f"Nothing of \"{data.get('exercise')}\" is logged before today. Exercises "
+                    f"logged before: {have}.")
+        return f"{days[0]['exercise']}: " + "; ".join(reports.day_text(e) for e in days) + "."

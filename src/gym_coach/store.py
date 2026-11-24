@@ -113,6 +113,24 @@ class Store:
     def logged_sets(self, date) -> list[dict]:
         return self._rows("SELECT * FROM logged_sets WHERE date=? ORDER BY id", (date,))
 
+    def recent_sets(self, before, since=None, days=3) -> dict[str, list[dict]]:
+        """Per exercise, the sets of the last `days` days it was logged on before `before`
+        (and on or after `since`), newest day first: {key: [{"date", "exercise", "sets"}]}.
+        The key is the name stripped and lower-cased, as the log matches names; "sets" are
+        the rows in logged order. Exercises come in order of their last day, newest first."""
+        rows = self._rows(
+            "SELECT * FROM logged_sets WHERE date < ? AND date >= ? ORDER BY date DESC, id",
+            (str(before), str(since or "")),
+        )
+        out: dict[str, list[dict]] = {}
+        for r in rows:
+            days_of = out.setdefault(r["exercise"].strip().lower(), [])
+            if days_of and days_of[-1]["date"] == r["date"]:
+                days_of[-1]["sets"].append(r)
+            elif len(days_of) < days:
+                days_of.append({"date": r["date"], "exercise": r["exercise"], "sets": [r]})
+        return out
+
     def update_logged_set(self, row_id, weight_kg, reps) -> None:
         self._run("UPDATE logged_sets SET weight_kg=?, reps=? WHERE id=?",
                   (weight_kg, reps, row_id))

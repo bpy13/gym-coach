@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import date, timedelta
 
+from gym_coach import reports
 from gym_coach.context import (
     DEFAULT_EQUIPMENT,
     DEFAULT_PHOTOS,
@@ -19,6 +20,8 @@ from gym_coach.prompts import CARDIO_SENTENCE, PLAN_SYSTEM, plan_prompt
 
 log = logging.getLogger(__name__)
 STRENGTH_PER_WEEK = 3
+HISTORY_WEEKS = 8  # the proposal sees what he lifted in the last 8 weeks
+HISTORY_DAYS = 3  # per exercise, its last 3 logged days
 STRENGTH_WEEKDAYS = (1, 3, 6)  # Tuesday, Thursday (home), Sunday (parents')
 CARDIO_WEEKDAYS = (0, 2, 4)  # Monday, Wednesday, Friday (home)
 
@@ -69,6 +72,63 @@ def validate(data, dates: list[str], equipment: dict[str, set[str]]) -> list[dic
     if sum(s["kind"] == "strength" for s in sessions) != STRENGTH_PER_WEEK:
         raise PlanError(f"need exactly {STRENGTH_PER_WEEK} strength sessions")
     return sorted(sessions, key=lambda s: s["date"])
+
+
+def history(store, week_start: date) -> dict[str, list[dict]]:
+    """Per exercise logged in the HISTORY_WEEKS before `week_start`, its last days."""
+    since = week_start - timedelta(weeks=HISTORY_WEEKS)
+    return store.recent_sets(week_start.isoformat(), since.isoformat(), HISTORY_DAYS)
+
+
+def history_text(store, past: dict[str, list[dict]]) -> str | None:
+    """The prompt's history lines, one per exercise, or None when nothing was logged."""
+    if not past:
+        return None
+    lines = []
+    for days in past.values():
+        parts = []
+        for entry in days:
+            rng = reports.planned_range(store, entry)
+            parts.append(reports.day_text(entry)
+                         + (f" (plan {rng[0]}-{rng[1]} reps)" if rng else ""))
+        lines.append(f"- {days[0]['exercise']}: " + "; ".join(parts))
+    return ("What he lifted before (per exercise its last logged days, newest first; "
+            "the weights to plan from):\n" + "\n".join(lines))
+
+
+def _number(value) -> float | None:
+    try:
+        return None if value is None or isinstance(value, bool) else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def weight_changes(store, sessions: list[dict], past: dict[str, list[dict]]) -> list[str]:
+    """One line per planned exercise whose weight differs from what he last lifted, with why."""
+    lines, seen = [], set()
+    for s in sessions:
+        for ex in s["exercises"]:
+            k = reports._key(str(ex.get("name", "")))
+            if k in seen or k not in past:
+                continue
+            seen.add(k)
+            last = past[k][0]
+            before, new = reports.top_weight(last), _number(ex.get("weight_kg"))
+            if before is None or new is None or new == before:
+                continue
+            rng = reports.planned_range(store, last)
+            if rng is None and _number(ex.get("rep_low")) and _number(ex.get("rep_high")):
+                rng = int(ex["rep_low"]), int(ex["rep_high"])
+            reps = [r["reps"] for r in last["sets"] if r["reps"] is not None]
+            if rng and reps and min(reps) >= rng[1]:
+                why = f"you reached {rng[1]} reps on every set"
+            elif rng and reps and min(reps) < rng[0]:
+                why = f"a set fell below {rng[0]} reps"
+            else:
+                why = "last time"
+            lines.append(f"{ex['name']}: {before:g} → {new:g} kg ({why}: "
+                         f"{reports.day_text(last)})")
+    return lines
 
 
 def _message(data: dict) -> str:
@@ -192,12 +252,15 @@ def propose(claude, store, model: str, week_start: date, change: str | None = No
     dates = week_dates(week_start)
     ids = {g: illustrations.allowed(equipment[g]) for g in equipment} if illustrations else None
     previous = store.plan_sessions(dates[0], dates[-1]) or None
+    if any(s["status"] != "proposed" for s in previous or []):
+        raise PlanError(f"the week of {dates[0]} is already approved, so I keep it as it is")
+    past = history(store, week_start)
     error = None
     for _ in range(2):
         data = claude.json(
             model,
             plan_prompt(profile, equipment["home"], equipment["parents"], dates,
-                        previous, change, error, ids),
+                        previous, change, error, ids, history_text(store, past)),
             system=PLAN_SYSTEM,
         )
         try:
@@ -214,7 +277,11 @@ def propose(claude, store, model: str, week_start: date, change: str | None = No
         store.delete_plan_session(d)
     for s in sessions:
         store.add_plan_session(s["date"], s["gym"], s["kind"], "proposed", s["exercises"])
-    return _message(data)
+    changes = weight_changes(store, sessions, past)
+    text = _message(data)
+    if changes:
+        text += "\n\nWeights from what you last lifted:\n" + "\n".join(changes)
+    return text
 
 
 def approve(store, week_start: date) -> int:

@@ -143,3 +143,26 @@ def format_exercise(store, day: str, exercise: str) -> str:
     lines = format_log(store, day).splitlines()[1:]
     return next((ln for ln in lines if _key(ln).startswith(_key(exercise) + ":")),
                 f"{exercise}: nothing logged")
+
+
+def day_text(entry: dict) -> str:
+    """One earlier day of an exercise (an entry of `Store.recent_sets`), e.g.
+    '35 kg x 10, 10, 8 on 19 Nov'."""
+    d = datetime.strptime(entry["date"], "%Y-%m-%d")
+    return f"{sets_text(entry['sets'])} on {d.day} {d:%b}"
+
+
+def top_weight(entry: dict) -> float | None:
+    """The heaviest weight of that day's sets (he ramps up across sets); None for bodyweight."""
+    weights = [r["weight_kg"] for r in entry["sets"] if r["weight_kg"] is not None]
+    return max(weights) if weights else None
+
+
+def planned_range(store, entry: dict) -> tuple[int, int] | None:
+    """The rep range the plan of that day gave the exercise, or None (his own exercise)."""
+    session = store.plan_session(entry["date"]) or {}
+    k = _key(entry["exercise"])
+    for ex in session.get("exercises") or []:
+        if _key(str(ex.get("name", ""))) == k and "rep_low" in ex and "rep_high" in ex:
+            return int(ex["rep_low"]), int(ex["rep_high"])
+    return None

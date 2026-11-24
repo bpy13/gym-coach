@@ -453,6 +453,7 @@ class Router:
         if self.store.get(WARMUP_KEY + day) == "1":
             lines.append("- Warm-up: sent, not done yet (the first exercise follows it)")
         names = set()
+        past = self.store.recent_sets(day, days=1)  # what he did last time (Task 14k)
         for i, ex in enumerate(session["exercises"]):
             name = ex["name"]
             names.add(name.strip().lower())
@@ -465,6 +466,9 @@ class Router:
             else:
                 line = (f"- {name}: 0 of {ex['sets']} sets logged"
                         f" (plan {ex['rep_low']}-{ex['rep_high']} reps at {ex['weight_kg']} kg)")
+            last = past.get(name.strip().lower())
+            if last:
+                line += f" | last: {reports.day_text(last[0])}"
             if shown is not None and shown[1] == i:
                 line += " <- shown now"
             lines.append(line)
