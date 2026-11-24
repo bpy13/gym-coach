@@ -1,6 +1,7 @@
 # Board: gym-coach
 
 ## Workers
+- slot 1: Task 14n (past sets exact, his effort word wins), building
 
 ## Ready to build
 
