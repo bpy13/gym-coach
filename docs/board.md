@@ -1,13 +1,13 @@
 # Board: gym-coach
 
 ## Workers
-- slot 1: Task 14m, labels built and live; waiting on the orchestrator for one rule question
 
 ## Ready to build
 
 ## Waiting on Brian
 
 ## Done and carried over
+- Task 14m, warm-up first and the trend across his sets (`weights.py read_sets`, `router.py`, `coach.py start_workout`, `planner.py`): done 2026-11-24 (slot 1). Warm-up fix live 18:34: the coach always sees the fixed routine and its state and starts the workout as "start" does. Each exercise reads too easy (one step up), steady (same weight, one more rep) or struggling (stay; one step under after two struggling days); the list, card, proposal and coach show why; during the workout the coach says go up, hold or drop. 386 tests pass, ruff clean. Bot restarted 18:43:33, no error for 3 minutes. 26 Nov now: Dumbbell squat 16, Lying leg curl 35, Seated cable row 27.5, Shoulder press 28, Lat pulldown 42, Triceps pushdown 12.5 (reps fell), Incline dumbbell press 10. Paid calls: none.
 - Task 14l, the day's weights follow his last session (`weights.py`, `router.py` `plan`, `coach.py`, `scheduler.py`, `planner.py`, `messages.py`): done 2026-11-24 (slot 1). One function in code sets each planned weight from his last day by the 14k rule (step: own gap, else same equipment, else the gym's commonest machine gap, home 7 kg; else 2 / 2.5 kg); every strength session not started shows and uses it, with where it came from ("42 kg (up from 35 kg x 12, 12, 12 on 17 Nov)"); "Chest press" finds "Machine chest press"; the other gym's machine is a note. 368 tests pass (347 before; 21 new in `tests/test_14l.py`), ruff clean. Bot restarted 18:24:59, no error for 3 minutes. Today's 24 Nov session now reads Chest press 35, Lat pulldown 42, Seated cable row 27.5, Shoulder press 28, Leg extension 35, Lying leg curl 35, Stiff-legged deadlift 16. Paid calls: none. Note for Brian: by the rule every 17 Nov set at 12-15 reps moves one full 7 kg plate up (Lying leg curl 28 -> 35 though 22 Nov at his parents' fell to 10 reps at 21 kg); Task 14m reads the trend.
 - Task 14k, planned weights from what he last lifted (`store.py recent_sets`, `planner.py`
   history and weight-change lines, `prompts.py`, `router.py` last-time line, `coach.py`
