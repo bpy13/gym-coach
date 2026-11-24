@@ -94,8 +94,8 @@ def test_session_is_header_one_message_per_exercise_and_closing(setup):
     assert parts[0] == ("Home gym, Tue 17 Nov", [])
     assert parts[-1][0].startswith("Reply with what you did") and parts[-1][1] == []
     texts = [t for t, _ in parts[1:-1]]
-    assert texts == ["Press: 3 x 8-12 at 20 kg", "Pulldown: 3 x 8-12 at 20 kg",
-                     "Leg ext: 3 x 8-12 at 20 kg", "Shoulders: 3 x 8-12 at 20 kg"]
+    assert texts == ["Press: 3 x 8-12", "Pulldown: 3 x 8-12",
+                     "Leg ext: 3 x 8-12", "Shoulders: 3 x 8-12"]
     assert [len(imgs) for _, imgs in parts[1:-1]] == [1, 1, 0, 0]  # no photo: text only
     assert max(Image.open(io.BytesIO(parts[1][1][0])).size) == 1280
 
@@ -135,7 +135,7 @@ def test_proposal_message_lists_every_day():
     text = proposal_message("Here is your week.", [strength("2026-11-23"), cardio])
     assert text.startswith("Here is your week.")
     assert "Home gym, Mon 23 Nov: strength" in text
-    assert "Leg ext: 3 x 8-12 at 20 kg" in text
+    assert "Leg ext: 3 x 8-12" in text
     assert "Home gym, Tue 24 Nov: cardio" in text
 
 
@@ -153,10 +153,10 @@ def test_proposal_sends_album_for_first_session_then_full_text(store, setup):
     app = App(tg, router, store,
               parts_for=lambda s, closing=True: session_parts(s, eq, photos, closing=closing))
     app.handle(Incoming(1, 5, text="/propose"))
-    assert [c for _, _, c in tg.pictures] == ["Press: 3 x 8-12 at 20 kg"]
+    assert [c for _, _, c in tg.pictures] == ["Press: 3 x 8-12 (no earlier record)"]
     assert "Reply with what you did" not in " ".join(t for _, t in tg.sent[:-1])
     text = tg.sent[-1][1]
-    assert "Your week." in text and "Press: 3 x 8-12 at 20 kg" in text
+    assert "Your week." in text and "Press: 3 x 8-12 (no earlier record)" in text
     assert "Wed 25 Nov: cardio" in text
     app.handle(Incoming(2, 5, text="/today"))
     assert len(tg.pictures) == 1  # only a proposal sends pictures

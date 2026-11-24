@@ -99,7 +99,8 @@ def test_swap_of_an_exercise_without_a_planned_weight_saves_once_and_moves_on(tm
     router, fake = make(s, equipment, [[_swap("Rear delt fly")], "Swapped."])
     router.handle("swap the rear delt")
     [res] = results(fake.calls[1])
-    assert not res.get("is_error") and "light weight" in res["content"]
+    # Task 14o: no weight named when none was given
+    assert not res.get("is_error") and "today: 3 x 10-12." in res["content"]
     assert [e["name"] for e in s.plan_session(DAY)["exercises"]] == [
         "Low row", "DB fly", "Seated leg curl", "Chest press"]
     assert s.get(f"flow:{DAY}") == "1" and router.pop_exercise()[1] == 1

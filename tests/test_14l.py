@@ -186,26 +186,27 @@ def router_for(store):
 def test_the_days_list_card_and_context_use_the_history_weight(nov17):
     router = router_for(nov17)
     today = router.handle("/today")
-    assert ("Lat pulldown: 3 x 8-12 at 42 kg (last time 35 kg felt easy: 35 kg x 12, 12, 12 "
-            "on 17 Nov)") in today
-    assert "Chest press: 3 x 8-12 at 35 kg (last time 28 kg felt easy: 21 kg x 12; 28 kg x 12, 12 on 17 Nov " \
-           "(Machine chest press))" in today
-    assert "Leg extension: 3 x 8-12 at 20 kg" in today  # no history: the stored weight
-    assert "Leg extension: 3 x 8-12 at 20 kg (" not in today
+    # Task 14o: last time's sets are shown; the history weight is kept for when he asks
+    assert ("Lat pulldown: 3 x 8-12 (last time, 17 Nov: 35 kg x 12, 35 kg x 12, 35 kg x 12)"
+            in today)
+    assert ("Chest press: 3 x 8-12 (last time, 17 Nov: 21 kg x 12, 28 kg x 12, 28 kg x 12)"
+            in today)
+    assert "Leg extension: 3 x 8-12 (no earlier record)" in today
     session = router.plan(DAY)
+    assert session["exercises"][1]["weight_kg"] == 42
     caption, _ = exercise_parts(session, 1, equipment_path=EQ, photos_dir="no-photos")
-    assert caption.startswith("Lat pulldown: 3 x 8-12 at 42 kg (last time 35 kg felt easy")
+    assert caption.startswith("Lat pulldown: 3 x 8-12 (last time, 17 Nov: 35 kg x 12")
     context = router.context(DAY)
-    assert ("- Chest press: 0 of 3 sets logged (plan 8-12 reps at 35 kg, last time 28 kg "
-            "felt easy) | last: 17 Nov, 3 sets: set 1 21 kg x 12, set 2 28 kg x 12, "
-            "set 3 28 kg x 12 as Machine chest press"
+    assert ("- Chest press: 0 of 3 sets logged (plan 8-12 reps) | if he asks what to lift: "
+            "35 kg, last time 28 kg felt easy | last: 17 Nov, 3 sets: set 1 21 kg x 12, "
+            "set 2 28 kg x 12, set 3 28 kg x 12 as Machine chest press"
             ) in context
 
 
 def test_the_morning_list_uses_the_history_weight(nov17):
     sent = []
     Scheduler(nov17, sent.append, now=lambda: NOW).tick()
-    assert "Lat pulldown: 3 x 8-12 at 42 kg (last time 35 kg felt easy" in sent[0]
+    assert "Lat pulldown: 3 x 8-12 (last time, 17 Nov: 35 kg x 12" in sent[0]
 
 
 def test_a_proposed_week_planned_earlier_shows_it_too(nov17):
@@ -257,10 +258,10 @@ def test_a_new_proposal_and_the_days_list_agree(nov17):
                   profile_path=PROFILE, equipment_path=EQ)
     stored = nov17.plan_session(DAY)["exercises"]
     assert [e["weight_kg"] for e in stored] == [42, 35, 20]  # the model's 30 and 99 overruled
-    assert "Lat pulldown: 42 kg (last time 35 kg felt easy: 35 kg x 12, 12, 12 on 17 Nov)" in msg
+    assert "42 kg" not in msg  # Task 14o: the message names no weight
     shown = router_for(nov17).plan(DAY)["exercises"]
     assert [e["weight_kg"] for e in shown] == [42, 35, 20]
-    assert "at 42 kg" in list_message(router_for(nov17).plan(DAY))
+    assert "at 42 kg" not in list_message(router_for(nov17).plan(DAY))
 
 
 # (5) stored sets are never changed

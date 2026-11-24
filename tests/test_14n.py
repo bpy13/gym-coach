@@ -131,7 +131,7 @@ def test_hard_does_not_hide_struggling():
 
 def test_no_word_and_reps_over_the_range_asks_how_it_felt():
     text = weights.today_text(sets((35, 15, None)), (8, 12))
-    assert "ask him in a few words how it felt" in text and "go up" not in text
+    assert "ask how it felt first" in text and "go up" not in text
     # at the top of the range, not over: the 14m rule stands
     assert "go up one step" in weights.today_text(sets((35, 12, None)), (8, 12))
 

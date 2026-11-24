@@ -138,9 +138,9 @@ def test_exercise_message_has_machine_photo_and_two_illustrations_under_one_capt
     assert len(parts) == 4 + 2
     body = parts[1:-1]
     assert [len(imgs) for _, imgs in body] == [1, 2, 0, 0]
-    assert body[0][0] == "Chest press: 3 x 8-12 at 10 kg"
+    assert body[0][0] == "Chest press: 3 x 8-12"
     first, cue = body[1][0].split(chr(10), 1)
-    assert first == "Goblet squat: 3 x 8-12 at 10 kg" and cue.startswith("Hold one dumbbell")
+    assert first == "Goblet squat: 3 x 8-12" and cue.startswith("Hold one dumbbell")
 
 
 def test_machine_with_illustration_gets_photo_and_illustration(ill, gym_files):
@@ -325,10 +325,10 @@ def test_caption_has_one_tip_line_by_default(ill, gym_files):
     session = {"date": "2026-11-17", "gym": "home", "kind": "strength", "exercises": [
         ex("Goblet squat", "dumbbells on a rack", illustration="Goblet_Squat")]}
     (caption, imgs), = session_parts(session, eq, photos, illustrations=i)[1:-1]
-    assert caption == "Goblet squat: 3 x 8-12 at 10 kg" + chr(10) + "Hold one dumbbell at your chest."
+    assert caption == "Goblet squat: 3 x 8-12" + chr(10) + "Hold one dumbbell at your chest."
     assert len(imgs) == 2
     (caption, _), = session_parts(session, eq, photos, illustrations=i, show_tip=False)[1:-1]
-    assert caption == "Goblet squat: 3 x 8-12 at 10 kg"
+    assert caption == "Goblet squat: 3 x 8-12"
 
 
 def test_pulldown_and_low_row_towers_use_the_cable_pictures(tmp_path):

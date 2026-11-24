@@ -48,8 +48,8 @@ def test_sends_once_at_seven_naming_gym_and_exercises(store):
     sch.tick()
     assert len(sent) == 2 and sent[1].startswith("Warm-up")  # the list, then the warm-up
     assert sent[0].splitlines()[0] == "Home gym, Tue 17 Nov"
-    assert "Chest press machine: 3 x 8-12 at 30 kg" in sent[0]
-    assert "Lat pulldown: 3 x 8-12 at 40 kg" in sent[0]
+    assert "Chest press machine: 3 x 8-12 (no earlier record)" in sent[0]
+    assert "Lat pulldown: 3 x 8-12 (no earlier record)" in sent[0]
 
 
 def test_start_at_3pm_same_day_sends_once(store):

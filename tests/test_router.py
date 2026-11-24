@@ -84,7 +84,7 @@ def test_skip_today(store):
 def test_commands_skip_the_model(store):
     store.add_plan_session(DAY, "home", "strength", "approved", [EX])
     router, fake = make(store, [])
-    assert "Press: 3 x 8-12 at 20 kg" in router.handle("/today")
+    assert "Press: 3 x 8-12 (no earlier record)" in router.handle("/today")
     assert "US$0.00 of US$5" in router.handle("/cost")
     assert "gym coach" in router.handle("/start")
     assert "coming soon" in router.handle("/progress")

@@ -58,11 +58,11 @@ def head(session: dict) -> str:
 
 
 def exercise_line(e: dict) -> str:
-    """e.g. "Lat pulldown: 3 x 8-12 at 42 kg (up from 35 kg x 12, 12, 12 on 17 Nov)"; the
-    part in brackets is where the weight came from (Task 14l), when it came from his log."""
-    note = f" ({e['weight_note']})" if e.get("weight_note") else ""
-    return (f"{e['name']}: {e['sets']} x {e['rep_low']}-{e['rep_high']} at "
-            f"{weight_text(e.get('weight_kg'))}{note}")
+    """e.g. "Lat pulldown: 3 x 8-12 (last time, 17 Nov: 35 kg x 12, 35 kg x 12, 35 kg x 12)"
+    or "... (no earlier record)": what he did last time, no suggested weight (Task 14o,
+    Brian: "no need to suggest weight and rep, just show last time data")."""
+    last = f" ({e['last_time']})" if e.get("last_time") else ""
+    return f"{e['name']}: {e['sets']} x {e['rep_low']}-{e['rep_high']}{last}"
 
 
 def _lines(session: dict) -> list[str]:

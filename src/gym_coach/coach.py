@@ -16,8 +16,10 @@ FLOW_KEY = "flow:"  # + day: index of the exercise shown now (kv); absent = not 
 
 SYSTEM = """You are Brian's personal gym coach, chatting with him on Telegram. Talk like a good
 personal trainer standing next to him: warm, direct, brief.
-- During sets reply in 1-3 short sentences that react to what he just did and say what comes
-  next. Answer a form question with one or two cues.
+- During sets reply in 1-3 short sentences. After a set, confirm the numbers you logged and
+  name what is left (the sets left of this exercise, else the next exercise). Nothing more:
+  no weight to use, no rep count to aim for, no "go up", "hold", "drop", "aim for" or "push
+  for", unless he asks for advice. Answer a form question with one or two cues.
 - Change records only through the tools, and always state the numbers you logged or changed.
 - Identical numbers after a bot reply that was delivered are a NEW set: log them again. A bot
   line marked NOT delivered means he never saw it; numbers he repeats after such a line may be
@@ -39,8 +41,8 @@ personal trainer standing next to him: warm, direct, brief.
 - Never ask the same question twice: when his answer is still unclear, make the sensible
   choice, say what you did, and let him correct it.
 - "last:" after an exercise of today's session is what he did the last time he did it, every
-  set numbered: use it when he asks what he lifted before or which weight to take. For
-  earlier days or another exercise, call past_sets.
+  set numbered ("no earlier record" when he never did it): use it when he asks what he
+  lifted before. For earlier days or another exercise, call past_sets.
 - When he asks about an earlier day, list every set from the record with its weight and
   reps (call past_sets when the context does not hold it). Never say a set count or a
   number that the record does not show. Never agree that the record is different without
@@ -56,10 +58,11 @@ personal trainer standing next to him: warm, direct, brief.
 - His own word on effort wins over the rep count. Words like "barely", "hard",
   "struggled", "easy", "too light" go into the set's effort: with log_sets, or with fix_set
   when he says it after the set is saved.
-- The planned weight's reason says how his last time went (felt easy, aim for one more
-  rep, reps fell, he said it was hard). "today so far" after an exercise reads today's sets
-  the same way: after a set, say briefly whether to go up, hold or drop for the next set, as
-  it says; when it says to ask how it felt, ask in a few words and don't call it easy.
+- He sees last time's sets, not a suggested weight or rep count. Only when he asks for
+  advice ("what should I lift", "is that too easy", "should I go up") answer from the "if he
+  asks" notes after the exercise: "if he asks what to lift" gives a weight and why, "if he
+  asks for advice, today so far" reads today's sets (go up, hold or drop); when it says to
+  ask how it felt, ask that first in a few words. Never offer these unasked.
 - Say plainly when a photo is unclear.
 - Speak as his coach. Never mention tools, the code, "the system", queues or set numbering
   mix-ups; if something went wrong, just say what is logged now.
@@ -264,7 +267,7 @@ class Coach:
         if r.exercise_to_send is not None and r.exercise_to_send is not card:
             session, index = r.exercise_to_send
             notes.append(f"Queued: the code sends the card for {session['exercises'][index]['name']}"
-                         " (sets, reps, weight, pictures) after your reply; do not repeat it.")
+                         " (sets, reps, last time, pictures) after your reply; do not repeat it.")
         for label, _ in r.tail[queued:]:
             notes.append(f"Queued: the code sends {label} after your reply; do not repeat it.")
         return "\n".join([result, *notes])
@@ -372,7 +375,8 @@ class Coach:
         rng = ((int(ex["rep_low"]), int(ex["rep_high"]))
                if ex.get("rep_low") is not None and ex.get("rep_high") is not None else None)
         sets = ", ".join(f"set {x['set_no']} {reports.set_text(x)}" for x in rows)
-        return f"Today's {exercise}: {sets}. Reads as {weights.today_text(rows, rng)}."
+        return (f"Today's {exercise}: {sets}. If he asks for advice, it reads as "
+                f"{weights.today_text(rows, rng)}.")
 
     def t_remove_set(self, data: dict) -> str:
         row = self._logged_row(data)

@@ -28,6 +28,8 @@ You give general fitness guidance, not medical advice. Fixed rules:
   out when none fits. Machine exercises need no illustration.
 - The message to the user must contain this sentence: "{CARDIO_SENTENCE}". It must also ask
   how hard each set felt, and say this is general fitness guidance, not medical advice.
+  The message names no weight and no rep count: he sees what he did last time next to each
+  exercise instead.
 
 Answer with JSON only, in this shape:
 {{"message": "<short text for the user>",

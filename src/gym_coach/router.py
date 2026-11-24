@@ -252,7 +252,8 @@ class Router:
         # the text is built before the save, so the tool never fails after the write (a
         # failure goes back to the model, which would swap again; Task 15f)
         lead = (f"Swapped {ex['name']} for {name} on {gear} today: {new['sets']} x "
-                f"{new['rep_low']}-{new['rep_high']} at {weight_text(new['weight_kg'])}.")
+                f"{new['rep_low']}-{new['rep_high']}"
+                + (f" at {weight_text(weight)}." if weight is not None else "."))
         if done:
             ex["sets"] = done
             session["exercises"].insert(index + 1, new)
@@ -493,16 +494,21 @@ class Router:
                 rng = ((int(ex["rep_low"]), int(ex["rep_high"]))
                        if ex.get("rep_low") is not None and ex.get("rep_high") is not None
                        else None)
-                line += f" | today so far: {weights.today_text(rows, rng)}"  # Task 14m
+                # Task 14m's reading, for advice only when he asks (Task 14o)
+                line += f" | if he asks for advice, today so far: {weights.today_text(rows, rng)}"
             else:
                 line = (f"- {name}: 0 of {ex['sets']} sets logged"
-                        f" (plan {ex['rep_low']}-{ex['rep_high']} reps at {ex['weight_kg']} kg"
-                        + _from(ex.get("weight_note")) + ")")
+                        f" (plan {ex['rep_low']}-{ex['rep_high']} reps)")
+                if ex.get("weight_note") and isinstance(ex.get("weight_kg"), (int, float)):
+                    line += (f" | if he asks what to lift: {ex['weight_kg']:g} kg"
+                             + _from(ex.get("weight_note")))
             last = hist.days_of(ex, session["gym"])
             if last:
                 line += f" | last: {reports.numbered_text(last[0])}"  # Task 14n
                 if reports._key(last[0]["exercise"]) != reports._key(name):
                     line += f" as {last[0]['exercise']}"
+            else:
+                line += f" | last: {weights.NO_RECORD}"
             if shown is not None and shown[1] == i:
                 line += " <- shown now"
             lines.append(line)
@@ -539,7 +545,7 @@ class Router:
 
     def _save(self, session: dict) -> None:
         self.store.add_plan_session(session["date"], session["gym"], session["kind"],
-                                    session["status"], session["exercises"])
+                                    session["status"], weights.stored(session["exercises"]))
 
     def _week_finished(self) -> bool:
         """True when this week's last planned session is done or skipped, or its day has
@@ -643,6 +649,8 @@ class Router:
                                 change=change, **self._planner_kw)
         sessions = self.store.plan_sessions(week.isoformat(),
                                             (week + timedelta(days=6)).isoformat())
+        # each exercise with last time's sets, no suggested weight (Task 14o)
+        sessions = [weights.with_last_time(self.store, s) for s in sessions]
         self.album_session = next((s for s in sessions if s["kind"] == "strength"), None)
         return proposal_message(intro, sessions)
 

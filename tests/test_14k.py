@@ -103,9 +103,9 @@ def test_history_older_than_eight_weeks_is_left_out(store):
     assert "What he lifted before" not in prompt_of(fake)
 
 
-def test_message_says_why_each_changed_weight_moved(store):
-    # Task 14l: the code sets the weight by the rule (the model's number is overruled) and
-    # the line says where it came from; each exercise on its own machine (one step 2.5 kg)
+def test_the_weight_is_set_by_the_rule_but_not_named_in_the_message(store):
+    # Task 14l: the code sets the weight by the rule (the model's number is overruled); Task
+    # 14o: the message names no weight (each exercise shows last time's sets instead)
     log(store, "2026-11-12", "Press", 20, 12, 12, 12)
     log(store, "2026-11-13", "Pulldown", 30, 10, 7, 6, equipment="Lat pulldown")
     log(store, "2026-11-14", "Curl", 10, 10, 9, 9, equipment="Leg extension")
@@ -118,11 +118,9 @@ def test_message_says_why_each_changed_weight_moved(store):
     fake = FakeClaude([json.dumps({"message": "Here is your week.", "sessions": sessions})])
     msg = propose(Claude(fake, store, 5.0), store, MODEL, WEEK, profile_path=PROFILE,
                   equipment_path=EQ)
-    assert "Weights from what you last lifted:" in msg
-    assert "Press: 22.5 kg (last time 20 kg felt easy: 20 kg x 12, 12, 12 on 12 Nov)" in msg
-    assert "Pulldown: 30 kg (again, reps fell last time: 30 kg x 10, 7, 6 on 13 Nov)" in msg
-    assert "Curl:" not in msg.split("Weights from")[1]  # kept: no line
-    assert msg.count("Press: 22.5 kg (last") == 1  # once, though it is in two home sessions
+    assert "Weights from what you last lifted" not in msg and " kg" not in msg
+    stored = store.plan_session(STRENGTH[0])["exercises"]
+    assert [e["weight_kg"] for e in stored] == [22.5, 30, 10]
 
 
 def test_no_change_lines_without_history(store):
@@ -176,11 +174,11 @@ def workout(store):
 def test_context_shows_what_he_did_last_time(workout):
     router, _ = router_for(workout)
     text = router.context(DAY)
-    assert ("- Press: 0 of 3 sets logged (plan 8-12 reps at 35 kg, again, aim for one more rep) "
-            "| last: "
+    assert ("- Press: 0 of 3 sets logged (plan 8-12 reps) | if he asks what to lift: 35 kg, "
+            "again, aim for one more rep | last: "
             "17 Nov, 3 sets: set 1 35 kg x 10, set 2 35 kg x 10, set 3 35 kg x 8") in text
     row = next(ln for ln in text.splitlines() if ln.startswith("- Row:"))
-    assert "last:" not in row
+    assert row.endswith("| last: no earlier record")  # Task 14o
 
 
 def test_todays_sets_are_not_last_time(workout):

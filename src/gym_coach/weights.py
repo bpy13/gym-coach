@@ -40,6 +40,7 @@ HARD_WORDS = ("barely", "hard", "struggl", "tough", "heavy", "difficult", "grind
               "exhaust", "brutal", "could not", "couldn't", "almost didn")
 EASY_WORDS = ("easy", "light", "effortless", "comfortable")
 SAID_HARD, SAID_EASY = "you said it was hard", "you said it was easy"
+NO_RECORD = "no earlier record"
 
 
 def effort_kind(text) -> str | None:
@@ -149,6 +150,21 @@ class History:
                 return min(gaps.items(), key=lambda kv: (-kv[1], kv[0]))[0]
         name = str(ex.get("name", "")).lower() + " " + gear
         return DUMBBELL_STEP if "dumbbell" in name else OTHER_STEP
+
+    def last_time(self, ex: dict, gym: str) -> str:
+        """What he did the last time, every set (Task 14o), e.g. "last time, 17 Nov: 21 kg x
+        15, 28 kg x 12, 28 kg x 15"; a machine's last day at the other gym only is named with
+        that gym; "no earlier record" when he never did it."""
+        days = self.days_of(ex, gym)
+        free = is_free(ex)
+        here = [e for e in days if free or e["gym"] in (gym, None)]
+        entry = here[0] if here else (days[0] if days else None)
+        if entry is None:
+            return NO_RECORD
+        where = "" if here else f" ({GYM_LABELS.get(entry['gym'], str(entry['gym']))})"
+        d = date.fromisoformat(entry["date"])
+        return (f"last time{where}, {d.day} {d:%b}: "
+                + ", ".join(reports.set_text(r) for r in entry["sets"]))
 
     def weight_for(self, ex: dict, gym: str) -> dict | None:
         """{"weight_kg": float or None, "note": text} for a planned exercise with history, or
@@ -264,15 +280,15 @@ ADVICE = {"too easy": "go up one step for the next set", "steady": "hold the wei
 
 
 def today_text(sets: list[dict], rng: tuple[int, int] | None) -> str:
-    """Today's sets so far, read the same way, for the coach (Task 14m). With no word from
-    him on effort and the last set over the top of the range, the coach asks how it felt
-    instead of calling it easy (Task 14n)."""
+    """Today's sets so far, read the same way, for the coach (Task 14m), told only when he
+    asks for advice (Task 14o). With no word from him on effort and the last set over the
+    top of the range, the coach asks how it felt instead of calling it easy (Task 14n)."""
     label, why, _ = read_sets(sets, rng)
     rows = [r for r in sets if r.get("reps") is not None]
     if (label == TOO_EASY and rng and rows and rows[-1]["reps"] > rng[1]
             and not any(effort_kind(r.get("effort")) for r in rows)):
-        return (f"over the {rng[0]}-{rng[1]} range and no word from him on effort: ask him in "
-                "a few words how it felt before you advise (easy: up one step; hard: hold)")
+        return (f"over the {rng[0]}-{rng[1]} range and no word from him on effort: if he asks "
+                "for advice, ask how it felt first (easy: up one step; hard: hold)")
     return f"{label}" + (f" ({why})" if why and why != "felt easy" else "") + f": {ADVICE[label]}"
 
 
@@ -305,18 +321,36 @@ def apply(store, session: dict) -> dict:
     return out
 
 
+def with_last_time(store, session: dict | None) -> dict | None:
+    """A copy of a strength session with each exercise's "last_time" (Task 14o: shown in
+    place of a suggested weight); other sessions as they are."""
+    if not session or session.get("kind") != "strength" or not session.get("exercises"):
+        return session
+    out = copy.deepcopy(session)
+    hist = History(store, session["date"])
+    for ex in out["exercises"]:
+        ex["last_time"] = hist.last_time(ex, session["gym"])
+    return out
+
+
+def stored(exercises: list[dict]) -> list[dict]:
+    """Exercises as they are saved: "last_time" is worked out each time, never stored."""
+    return [{k: v for k, v in e.items() if k != "last_time"} for e in exercises]
+
+
 def session(store, day: str, today: str) -> dict | None:
     """The plan of `day` as he should see it: a strength session not started (no set logged
     that day, today or later) gets the weights from his history. Today's is written into the
     stored session once, so a weight he changes before the first set stays. Stored sets are
-    never changed."""
+    never changed. Every strength session carries "last_time" per exercise (Task 14o); the
+    weight stays for when he asks what to lift."""
     s = store.plan_session(day)
     if (not s or s["kind"] != "strength" or day < today or store.logged_sets(day)
             or store.get(APPLIED_KEY + day) == "1"):
-        return s
+        return with_last_time(store, s)
     new = apply(store, s)
     if day == today:
         store.add_plan_session(new["date"], new["gym"], new["kind"], new["status"],
-                               new["exercises"])
+                               stored(new["exercises"]))
         store.set(APPLIED_KEY + day, "1")
-    return new
+    return with_last_time(store, new)

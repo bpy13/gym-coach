@@ -44,7 +44,9 @@ from gym_coach.router import Router
 from gym_coach.store import Store
 
 WORK_DIR = Path(tempfile.gettempdir()) / "gym-coach-replay"
-LINE = re.compile(r"^(?P<name>.+): (?P<sets>\d+) x (?P<lo>\d+)-(?P<hi>\d+) at (?P<kg>[\d.]+) kg$")
+# "Name: 3 x 8-12 at 35 kg" (before Task 14o) or "Name: 3 x 8-12 (last time, ...)" (no weight)
+LINE = re.compile(r"^(?P<name>.+?): (?P<sets>\d+) x (?P<lo>\d+)-(?P<hi>\d+)"
+                  r"(?: at (?P<kg>[\d.]+) kg)?(?: \(.*\))?$")
 # the leg curl exercise was dropped from the stored row, so it is rebuilt by hand
 LEG_CURL = {
     "default": ("Lying leg curl", "leg extension (seated) and lying leg curl", "Lying_Leg_Curls"),
@@ -73,8 +75,9 @@ def build_session(original: sqlite3.Connection, day: str, morning: str,
             continue
         name = m["name"]
         known = by_name.get(name.strip().lower())
-        weight = float(m["kg"])
-        weight = int(weight) if weight == int(weight) else weight
+        weight = float(m["kg"]) if m["kg"] else (known or {}).get("weight_kg")
+        if isinstance(weight, float):
+            weight = int(weight) if weight == int(weight) else weight
         ex = {"name": name, "equipment": "", "sets": int(m["sets"]), "rep_low": int(m["lo"]),
               "rep_high": int(m["hi"]), "weight_kg": weight}
         if "leg curl" in name.lower():

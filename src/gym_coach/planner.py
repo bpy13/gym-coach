@@ -96,22 +96,6 @@ def history_text(store, past: dict[str, list[dict]]) -> str | None:
             "the weights to plan from):\n" + "\n".join(lines))
 
 
-def weight_changes(sessions: list[dict]) -> list[str]:
-    """One line per planned exercise that felt easy or hard last time, with its weight and
-    why (the "weight_note" and "weight_label" of `weights.apply`), once per exercise name."""
-    lines, seen = [], set()
-    for s in sessions:
-        for ex in s["exercises"]:
-            note = str(ex.get("weight_note") or "")
-            k = reports._key(str(ex.get("name", "")))
-            if k in seen or ex.get("weight_label") not in (weights.TOO_EASY,
-                                                            weights.STRUGGLING):
-                continue
-            seen.add(k)
-            lines.append(f"{ex['name']}: {ex['weight_kg']:g} kg ({note})")
-    return lines
-
-
 def _message(data: dict) -> str:
     text = str(data.get("message") or "").strip()
     if CARDIO_SENTENCE not in text:
@@ -260,11 +244,8 @@ def propose(claude, store, model: str, week_start: date, change: str | None = No
     sessions = [weights.apply(store, s) for s in sessions]
     for s in sessions:
         store.add_plan_session(s["date"], s["gym"], s["kind"], "proposed", s["exercises"])
-    changes = weight_changes(sessions)
-    text = _message(data)
-    if changes:
-        text += "\n\nWeights from what you last lifted:\n" + "\n".join(changes)
-    return text
+    # no weight lines: each exercise shows last time's sets instead (Task 14o)
+    return _message(data)
 
 
 def approve(store, week_start: date) -> int:

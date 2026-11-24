@@ -123,7 +123,7 @@ def test_steady_keeps_the_top_and_aims_for_one_more_rep(store):
                    "note": "again, aim for one more rep: 35 kg x 10, 10, 9 on 17 Nov"}
 
 
-def test_list_card_and_proposal_show_the_weight_with_its_reason(store):
+def test_the_weight_and_its_reason_are_kept_for_when_he_asks(store):
     did(store, "2026-11-17", "home", [
         ("Lat pulldown", "lat pulldown", [(35, 15), (35, 15), (35, 15)]),
         ("Seated cable row", CABLE, [(25, 15), (25, 12), (25, 10)]),
@@ -131,16 +131,15 @@ def test_list_card_and_proposal_show_the_weight_with_its_reason(store):
     store.add_plan_session(DAY, "home", "strength", "approved", [
         ex("Lat pulldown", 25, "lat pulldown"), ex("Seated cable row", 20, CABLE)])
     router = router_for(store)
-    today = router.handle("/today")
-    assert ("Lat pulldown: 3 x 8-12 at 37.5 kg (last time 35 kg felt easy: "
-            "35 kg x 15, 15, 15 on 17 Nov)") in today
-    assert ("Seated cable row: 3 x 8-12 at 25 kg (again, reps fell last time: "
-            "25 kg x 15, 12, 10 on 17 Nov)") in today
+    today = router.handle("/today")  # Task 14o: shown, last time's sets only
+    assert ("Lat pulldown: 3 x 8-12 (last time, 17 Nov: 35 kg x 15, 35 kg x 15, 35 kg x 15)"
+            in today)
+    assert "37.5" not in today and "reps fell" not in today
     caption, _ = exercise_parts(router.plan(DAY), 1, equipment_path=EQ, photos_dir="no-photos")
-    assert caption.startswith("Seated cable row: 3 x 8-12 at 25 kg (again, reps fell")
+    assert caption.startswith("Seated cable row: 3 x 8-12 (last time, 17 Nov: 25 kg x 15")
     ctx = router.context(DAY)
-    assert ("(plan 8-12 reps at 25 kg, again, reps fell last time) | last: 17 Nov, 3 sets: "
-            "set 1 25 kg x 15") in ctx
+    assert ("(plan 8-12 reps) | if he asks what to lift: 25 kg, again, reps fell last time "
+            "| last: 17 Nov, 3 sets: set 1 25 kg x 15") in ctx
 
     store.delete_plan_session(DAY)
     plan = [ex("Lat pulldown", 30, "Lat pulldown"), ex("Seated cable row", 99, "Dual adjustable cable machine")]
@@ -152,8 +151,7 @@ def test_list_card_and_proposal_show_the_weight_with_its_reason(store):
                {"date": "2026-11-23", "kind": "cardio", "exercises": []}]}
     msg = propose(Claude(FakeClaude([json.dumps(week)]), store, 5.0), store, MODEL,
                   date(2026, 11, 23), profile_path=PROFILE, equipment_path=EQ)
-    assert "Lat pulldown: 37.5 kg (last time 35 kg felt easy: 35 kg x 15, 15, 15" in msg
-    assert "Seated cable row: 25 kg (again, reps fell last time" in msg
+    assert "37.5" not in msg and "reps fell" not in msg
     assert [e["weight_kg"] for e in store.plan_session(DAY)["exercises"]] == [37.5, 25]
 
 
