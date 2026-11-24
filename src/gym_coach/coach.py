@@ -6,7 +6,9 @@ goes back to the model so it can fix its own call."""
 
 from __future__ import annotations
 
-from gym_coach import meals, reports, targets
+from datetime import date
+
+from gym_coach import meals, reports, targets, weights
 from gym_coach.context import DEFAULT_PROFILE, profile_text
 from gym_coach.llm import HK
 
@@ -36,12 +38,28 @@ personal trainer standing next to him: warm, direct, brief.
 - When a tool refuses, read why and fix your call with one of the valid choices it lists.
 - Never ask the same question twice: when his answer is still unclear, make the sensible
   choice, say what you did, and let him correct it.
-- "last:" after an exercise of today's session is what he did the last time he did it: use it
-  when he asks what he lifted before or which weight to take. For earlier days or another
-  exercise, call past_sets.
+- "last:" after an exercise of today's session is what he did the last time he did it, every
+  set numbered: use it when he asks what he lifted before or which weight to take. For
+  earlier days or another exercise, call past_sets.
+- When he asks about an earlier day, list every set from the record with its weight and
+  reps (call past_sets when the context does not hold it). Never say a set count or a
+  number that the record does not show. Never agree that the record is different without
+  reading it again: when the record and his memory differ, say what the record holds and
+  ask whether to correct it. When he questions or disputes an earlier day ("there should be
+  3 sets", "that's only 2 sets", "that's a mistake"), first repeat that day's sets from the
+  record, every set numbered.
+- Change an earlier day's record with fix_past_set only once he has named the set and the
+  right numbers, or said yes to the exact change you proposed. A bare "that's a mistake" or
+  "wrong" is not enough: ask which set is wrong and what it should be.
+- While an exercise is shown now, "last session" or "last time" means the exercise shown
+  now, unless he names another exercise or says the whole session.
+- His own word on effort wins over the rep count. Words like "barely", "hard",
+  "struggled", "easy", "too light" go into the set's effort: with log_sets, or with fix_set
+  when he says it after the set is saved.
 - The planned weight's reason says how his last time went (felt easy, aim for one more
-  rep, reps fell). "today so far" after an exercise reads today's sets the same way: after a
-  set, say briefly whether to go up, hold or drop for the next set, as it says.
+  rep, reps fell, he said it was hard). "today so far" after an exercise reads today's sets
+  the same way: after a set, say briefly whether to go up, hold or drop for the next set, as
+  it says; when it says to ask how it felt, ask in a few words and don't call it easy.
 - Say plainly when a photo is unclear.
 - Speak as his coach. Never mention tools, the code, "the system", queues or set numbering
   mix-ups; if something went wrong, just say what is logged now.
@@ -74,13 +92,18 @@ TOOLS = [
               "exercise": _EX, "weight_kg": {"type": "number",
                                              "description": "kg; leave out for bodyweight"},
               "reps": {"type": "integer"},
-              "effort": {"type": "string", "description": "how hard it felt, if he says"},
+              "effort": {"type": "string",
+                         "description": "how it felt in his own words, if he says (e.g. "
+                         "\"barely\", \"hard\", \"easy\", \"too light\")"},
               "own": {"type": "boolean",
                       "description": "true for his own exercise, not in today's session"}},
               "required": ["exercise", "reps"]}}}, ["sets"]),
-    _tool("fix_set", "Change the weight and/or reps of one set already saved today.",
+    _tool("fix_set", "Change the weight, reps and/or his effort word of one set already "
+          "saved today.",
           {"exercise": _EX, "set_no": {"type": "integer"}, "weight_kg": _KG,
-           "reps": {"type": "integer"}}, ["exercise", "set_no"]),
+           "reps": {"type": "integer"},
+           "effort": {"type": "string", "description": "how it felt in his own words"}},
+          ["exercise", "set_no"]),
     _tool("remove_set", "Delete one set saved today by mistake.",
           {"exercise": _EX, "set_no": {"type": "integer"}}, ["exercise", "set_no"]),
     _tool("show_exercise", "Show an exercise of today's session now (its card is sent after "
@@ -130,9 +153,19 @@ TOOLS = [
           "once this week's sessions are over; he said yes to it).",
           {"change": {"type": "string"}}, ["change"]),
     _tool("approve_plan", "He approves the proposed week."),
-    _tool("past_sets", "What he did in an exercise on its last 3 days before today (weight "
-          "and reps of each set), e.g. when he asks what he lifted last time.",
+    _tool("past_sets", "What he did in an exercise on its last 3 days before today (every "
+          "set numbered, with weight and reps), e.g. when he asks what he lifted last time.",
           {"exercise": {"type": "string", "description": "the exercise name"}}, ["exercise"]),
+    _tool("fix_past_set", "Correct the record of an EARLIER day (not today: use fix_set): "
+          "change a set's weight/reps, add a set, or remove one. Only once he named the set "
+          "and the right numbers, or said yes to this exact change.",
+          {"date": {"type": "string", "description": "YYYY-MM-DD, before today"},
+           "exercise": {"type": "string", "description": "the exercise name as logged"},
+           "action": {"type": "string", "enum": ["change", "add", "remove"],
+                      "description": "default change"},
+           "set_no": {"type": "integer", "description": "the set to change or remove; for "
+                      "add, the place of the new set (leave out to add it last)"},
+           "weight_kg": _KG, "reps": {"type": "integer"}}, ["date", "exercise"]),
 ]
 
 
@@ -305,22 +338,41 @@ class Coach:
     def t_fix_set(self, data: dict) -> str:
         row = self._logged_row(data)
         weight, reps = _optional(data, "weight_kg"), data.get("reps")
+        effort = str(data.get("effort") or "").strip() or None
         if reps is not None:
             reps = _positive_int(reps, "reps")
-        if weight is None and reps is None:
-            raise ToolRefused("Give weight_kg or reps (or both) for the set.")
+        if weight is None and reps is None and effort is None:
+            raise ToolRefused("Give weight_kg, reps or effort for the set.")
         r = self.r
         r._open(self.day)
+        said = ""
+        if effort is not None and effort != row.get("effort"):
+            r.store.set_effort(row["id"], effort)
+            said = f"Saved how {row['exercise']} set {row['set_no']} felt: {effort}. "
+        if weight is None and reps is None:
+            return (said or "No change. ") + self._today_read(row["exercise"])
         others = [x for x in r.store.logged_sets(self.day) if x["id"] != row["id"]]
         line = r._fix_set(self.day, {"exercise": row["exercise"], "set_no": row["set_no"],
                                      "weight_kg": weight, "reps": reps})
         if line is None:
-            return (f"No change: {row['exercise']} set {row['set_no']} is already "
-                    f"{reports.sets_text([row])}.")
+            return said + (f"No change to the numbers: {row['exercise']} set {row['set_no']} "
+                           f"is already {reports.sets_text([row])}.")
         far = (r._typo(self.day, [{"exercise": row["exercise"], "weight_kg": weight}], others)
                if weight else "")
-        return (f"{line}. Today's log: {reports.format_exercise(r.store, self.day, row['exercise'])}."
-                + far)
+        return (said + f"{line}. Today's log: "
+                f"{reports.format_exercise(r.store, self.day, row['exercise'])}." + far)
+
+    def _today_read(self, exercise: str) -> str:
+        """Today's sets of an exercise with how they read now (Task 14n)."""
+        rows = [x for x in self.r.store.logged_sets(self.day)
+                if key(x["exercise"]) == key(exercise)]
+        session = self.r.plan(self.day) or {}
+        ex = next((e for e in session.get("exercises") or [] if key(e["name"]) == key(exercise)),
+                  {})
+        rng = ((int(ex["rep_low"]), int(ex["rep_high"]))
+               if ex.get("rep_low") is not None and ex.get("rep_high") is not None else None)
+        sets = ", ".join(f"set {x['set_no']} {reports.set_text(x)}" for x in rows)
+        return f"Today's {exercise}: {sets}. Reads as {weights.today_text(rows, rng)}."
 
     def t_remove_set(self, data: dict) -> str:
         row = self._logged_row(data)
@@ -501,4 +553,65 @@ class Coach:
             have = ", ".join(v[0]["exercise"] for v in past.values()) or "none"
             return (f"Nothing of \"{data.get('exercise')}\" is logged before today. Exercises "
                     f"logged before: {have}.")
-        return f"{days[0]['exercise']}: " + "; ".join(reports.day_text(e) for e in days) + "."
+        return (f"{days[0]['exercise']}, its last {len(days)} day{'s' if len(days) != 1 else ''}"
+                " before today, newest first (every set in the record):\n"
+                + "\n".join(f"- {reports.numbered_text(e)}" for e in days))
+
+    def t_fix_past_set(self, data: dict) -> str:
+        """Correct a set of an earlier day (Task 14n); states the old and new values."""
+        r = self.r
+        day = str(data.get("date") or "").strip()
+        try:
+            when = date.fromisoformat(day)
+        except ValueError:
+            raise ToolRefused(f"date must be YYYY-MM-DD, not {data.get('date')!r}.") from None
+        if day >= self.day:
+            raise ToolRefused(f"{day} is not before today ({self.day}); today's sets go "
+                              "through fix_set, log_sets or remove_set.")
+        rows = r.store.logged_sets(day)
+        mine = [x for x in rows if key(x["exercise"]) == key(data.get("exercise"))]
+        label = f"{when.day} {when:%b}"
+        if not mine:
+            have = ", ".join(dict.fromkeys(x["exercise"] for x in rows)) or "nothing"
+            raise ToolRefused(f"No sets of \"{data.get('exercise')}\" on {label}. Logged that "
+                              f"day: {have}.")
+        name = mine[0]["exercise"]
+        action = str(data.get("action") or "change").strip().lower()
+        set_no = data.get("set_no")
+        if set_no is not None:
+            set_no = _positive_int(set_no, "set_no")
+        weight = _optional(data, "weight_kg")
+        reps = None if data.get("reps") is None else _positive_int(data["reps"], "reps")
+        row = next((x for x in mine if x["set_no"] == set_no), None)
+        if action in ("change", "remove") and row is None:
+            raise ToolRefused(f"{name} on {label} has sets 1 to {len(mine)}, not set "
+                              f"{data.get('set_no')!r}.")
+        if action == "change":
+            if weight is None and reps is None:
+                raise ToolRefused("Give weight_kg and/or reps for the set.")
+            new = {"weight_kg": row["weight_kg"] if weight is None else weight,
+                   "reps": row["reps"] if reps is None else reps}
+            if (new["weight_kg"], new["reps"]) == (row["weight_kg"], row["reps"]):
+                return (f"No change: {name} on {label}, set {set_no} is already "
+                        f"{reports.sets_text([row])}.")
+            r.store.update_logged_set(row["id"], new["weight_kg"], new["reps"])
+            done = (f"{name} on {label}: set {set_no} was {reports.sets_text([row])}, now "
+                    f"{reports.sets_text([new])}")
+        elif action == "add":
+            if reps is None:
+                raise ToolRefused("Give reps (and weight_kg) for the set to add.")
+            at = len(mine) + 1 if set_no is None or set_no > len(mine) else set_no
+            new = {"exercise": name, "weight_kg": weight, "reps": reps, "effort": None,
+                   "saved_at": None}
+            place = rows.index(mine[-1]) + 1 if at > len(mine) else rows.index(mine[at - 1])
+            reports._rewrite(r.store, day, rows[:place] + [new] + rows[place:])
+            done = f"{name} on {label}: added set {at}: {reports.sets_text([new])}"
+        elif action == "remove":
+            reports.remove(r.store, day, row["id"])
+            done = (f"{name} on {label}: removed set {set_no} (was "
+                    f"{reports.sets_text([row])})")
+        else:
+            raise ToolRefused("action must be change, add or remove.")
+        after = [x for x in r.store.logged_sets(day) if key(x["exercise"]) == key(name)]
+        return (f"{done}. The record now: "
+                f"{reports.numbered_text({'date': day, 'sets': after})}.")

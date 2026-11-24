@@ -152,6 +152,23 @@ def day_text(entry: dict) -> str:
     return f"{sets_text(entry['sets'])} on {d.day} {d:%b}"
 
 
+def set_text(row: dict) -> str:
+    """One set, e.g. '28 kg x 12', with his effort word if saved: '28 kg x 12 (hard)'."""
+    text = (f"{row['weight_kg']:g} kg x " if row["weight_kg"] is not None else "x ") + str(
+        row["reps"])
+    return text + (f" ({row['effort']})" if row.get("effort") else "")
+
+
+def numbered_text(entry: dict) -> str:
+    """One earlier day of an exercise with every set numbered and the count, for the coach
+    (Task 14n: the grouped '21 kg x 15; 28 kg x 12, 15' was read as two sets), e.g.
+    '17 Nov, 3 sets: set 1 21 kg x 15, set 2 28 kg x 12, set 3 28 kg x 15'."""
+    d = datetime.strptime(entry["date"], "%Y-%m-%d")
+    rows = entry["sets"]
+    return (f"{d.day} {d:%b}, {len(rows)} set{'s' if len(rows) != 1 else ''}: "
+            + ", ".join(f"set {i} {set_text(r)}" for i, r in enumerate(rows, 1)))
+
+
 def top_weight(entry: dict) -> float | None:
     """The heaviest weight of that day's sets (he ramps up across sets); None for bodyweight."""
     weights = [r["weight_kg"] for r in entry["sets"] if r["weight_kg"] is not None]

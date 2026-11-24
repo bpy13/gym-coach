@@ -197,7 +197,8 @@ def test_the_days_list_card_and_context_use_the_history_weight(nov17):
     assert caption.startswith("Lat pulldown: 3 x 8-12 at 42 kg (last time 35 kg felt easy")
     context = router.context(DAY)
     assert ("- Chest press: 0 of 3 sets logged (plan 8-12 reps at 35 kg, last time 28 kg "
-            "felt easy) | last: 21 kg x 12; 28 kg x 12, 12 on 17 Nov as Machine chest press"
+            "felt easy) | last: 17 Nov, 3 sets: set 1 21 kg x 12, set 2 28 kg x 12, "
+            "set 3 28 kg x 12 as Machine chest press"
             ) in context
 
 

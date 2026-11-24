@@ -32,6 +32,28 @@ GENERIC = {"machine", "machines", "cable", "cables", "dumbbell", "dumbbells", "b
 GYM_LABELS = {"home": "home gym", "parents": "parents gym"}
 TOO_EASY, STEADY, STRUGGLING = "too easy", "steady", "struggling"
 FELL_REPS = 3  # reps lost from set to set at one weight, in total, that mean struggling
+# his own word on effort (Task 14n): it beats the rep count. Negated words first; with both
+# kinds of word, hard wins (the safer read)
+NOT_EASY = ("not easy", "not that easy", "wasn't easy", "not light", "not too light")
+NOT_HARD = ("not hard", "not that hard", "wasn't hard", "not heavy", "not tough")
+HARD_WORDS = ("barely", "hard", "struggl", "tough", "heavy", "difficult", "grind", "fail",
+              "exhaust", "brutal", "could not", "couldn't", "almost didn")
+EASY_WORDS = ("easy", "light", "effortless", "comfortable")
+SAID_HARD, SAID_EASY = "you said it was hard", "you said it was easy"
+
+
+def effort_kind(text) -> str | None:
+    """"hard", "easy" or None (no word, or a neutral one like "ok") from his effort words."""
+    low = " ".join(str(text or "").lower().replace("’", "'").split())
+    if any(w in low for w in NOT_EASY):
+        return "hard"
+    if any(w in low for w in NOT_HARD):
+        return "easy"
+    if any(w in low for w in HARD_WORDS):
+        return "hard"
+    if any(w in low for w in EASY_WORDS):
+        return "easy"
+    return None
 
 
 def _words(name: str) -> set[str]:
@@ -149,7 +171,8 @@ class History:
         said = reports.day_text(last)
         label, why, at = read_sets(last["sets"], rng)
         if label == TOO_EASY:
-            weight, note = top + step, f"last time {top:g} kg felt easy: {said}"
+            felt = "felt easy, you said" if why == SAID_EASY else "felt easy"
+            weight, note = top + step, f"last time {top:g} kg {felt}: {said}"
         elif label == STRUGGLING:
             at = top if at is None else at
             before = (read_sets(here[1]["sets"], _range(here[1], ex))
@@ -158,6 +181,8 @@ class History:
                 weight, note = at - step, f"one step down, {why} twice in a row: {said}"
             else:
                 weight, note = at, f"again, {why} last time: {said}"
+        elif why:  # he said it was hard (Task 14n)
+            weight, note = top, f"again, {why} last time: {said}"
         else:
             weight, note = top, f"again, aim for one more rep: {said}"
         if last["exercise"].strip().lower() != str(ex.get("name", "")).strip().lower():
@@ -187,10 +212,25 @@ def read_sets(sets: list[dict], rng: tuple[int, int] | None) -> tuple[str, str, 
     STRUGGLING: reps fell from set to set at the same weight by FELL_REPS or more in total,
     or he lowered the weight during the day, or a set ended under the bottom of the range.
     TOO_EASY: he raised the weight and still reached the top of the range on the last set,
-    or every set reached the top or more. STEADY otherwise."""
+    or every set reached the top or more. STEADY otherwise.
+
+    His own word wins over all of this (Task 14n): the last set with an effort word he gave
+    decides. Easy: TOO_EASY. Hard: never TOO_EASY; STRUGGLING stays, the rest is STEADY
+    ("you said it was hard": hold the weight)."""
     rows = [r for r in sets if r.get("reps") is not None]
     if not rows:
         return STEADY, "", None
+    said = next((k for k in (effort_kind(r.get("effort")) for r in reversed(rows)) if k), None)
+    if said == "easy":
+        return TOO_EASY, SAID_EASY, None
+    label, why, at = _by_reps(rows, rng)
+    if said == "hard" and label != STRUGGLING:
+        return STEADY, SAID_HARD, None
+    return label, why, at
+
+
+def _by_reps(rows: list[dict], rng: tuple[int, int] | None) -> tuple[str, str, float | None]:
+    """The label from the reps and weights alone (Task 14m)."""
     known = [r["weight_kg"] for r in rows if r["weight_kg"] is not None]
     if rng and rows[-1]["reps"] >= rng[1] and rows[-1]["weight_kg"] == (
             max(known) if known else None):
@@ -224,9 +264,16 @@ ADVICE = {"too easy": "go up one step for the next set", "steady": "hold the wei
 
 
 def today_text(sets: list[dict], rng: tuple[int, int] | None) -> str:
-    """Today's sets so far, read the same way, for the coach (Task 14m)."""
+    """Today's sets so far, read the same way, for the coach (Task 14m). With no word from
+    him on effort and the last set over the top of the range, the coach asks how it felt
+    instead of calling it easy (Task 14n)."""
     label, why, _ = read_sets(sets, rng)
-    return f"{label}" + (f" ({why})" if why and label != TOO_EASY else "") + f": {ADVICE[label]}"
+    rows = [r for r in sets if r.get("reps") is not None]
+    if (label == TOO_EASY and rng and rows and rows[-1]["reps"] > rng[1]
+            and not any(effort_kind(r.get("effort")) for r in rows)):
+        return (f"over the {rng[0]}-{rng[1]} range and no word from him on effort: ask him in "
+                "a few words how it felt before you advise (easy: up one step; hard: hold)")
+    return f"{label}" + (f" ({why})" if why and why != "felt easy" else "") + f": {ADVICE[label]}"
 
 
 def _gap(weights) -> float | None:

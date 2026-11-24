@@ -139,7 +139,8 @@ def test_list_card_and_proposal_show_the_weight_with_its_reason(store):
     caption, _ = exercise_parts(router.plan(DAY), 1, equipment_path=EQ, photos_dir="no-photos")
     assert caption.startswith("Seated cable row: 3 x 8-12 at 25 kg (again, reps fell")
     ctx = router.context(DAY)
-    assert "(plan 8-12 reps at 25 kg, again, reps fell last time) | last: 25 kg x 15" in ctx
+    assert ("(plan 8-12 reps at 25 kg, again, reps fell last time) | last: 17 Nov, 3 sets: "
+            "set 1 25 kg x 15") in ctx
 
     store.delete_plan_session(DAY)
     plan = [ex("Lat pulldown", 30, "Lat pulldown"), ex("Seated cable row", 99, "Dual adjustable cable machine")]

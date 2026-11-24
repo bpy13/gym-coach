@@ -484,7 +484,7 @@ class Router:
             names.add(name.strip().lower())
             done = reports.sets_done(self.store, day, name)
             if done:
-                sets = "; ".join(f"{name} set {r['set_no']}: {reports.sets_text([r])}"
+                sets = "; ".join(f"{name} set {r['set_no']}: {reports.set_text(r)}"
                                  for r in self.store.logged_sets(day)
                                  if r["exercise"].strip().lower() == name.strip().lower())
                 line = f"- {name}: {done} of {ex['sets']} sets logged ({sets})"
@@ -500,7 +500,7 @@ class Router:
                         + _from(ex.get("weight_note")) + ")")
             last = hist.days_of(ex, session["gym"])
             if last:
-                line += f" | last: {reports.day_text(last[0])}"
+                line += f" | last: {reports.numbered_text(last[0])}"  # Task 14n
                 if reports._key(last[0]["exercise"]) != reports._key(name):
                     line += f" as {last[0]['exercise']}"
             if shown is not None and shown[1] == i:

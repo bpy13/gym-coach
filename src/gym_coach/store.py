@@ -135,6 +135,10 @@ class Store:
         self._run("UPDATE logged_sets SET weight_kg=?, reps=? WHERE id=?",
                   (weight_kg, reps, row_id))
 
+    def set_effort(self, row_id, effort) -> None:
+        """His own word on how a set felt (Task 14n)."""
+        self._run("UPDATE logged_sets SET effort=? WHERE id=?", (effort, row_id))
+
     def clear_logged_sets(self, date) -> None:
         self._run("DELETE FROM logged_sets WHERE date=?", (date,))
 

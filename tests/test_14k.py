@@ -178,7 +178,7 @@ def test_context_shows_what_he_did_last_time(workout):
     text = router.context(DAY)
     assert ("- Press: 0 of 3 sets logged (plan 8-12 reps at 35 kg, again, aim for one more rep) "
             "| last: "
-            "35 kg x 10, 10, 8 on 17 Nov") in text
+            "17 Nov, 3 sets: set 1 35 kg x 10, set 2 35 kg x 10, set 3 35 kg x 8") in text
     row = next(ln for ln in text.splitlines() if ln.startswith("- Row:"))
     assert "last:" not in row
 
@@ -186,7 +186,8 @@ def test_context_shows_what_he_did_last_time(workout):
 def test_todays_sets_are_not_last_time(workout):
     reports.log_report(workout, DAY, [{"exercise": "Press", "weight_kg": 37.5, "reps": 9}])
     router, _ = router_for(workout)
-    assert "last: 35 kg x 10, 10, 8 on 17 Nov" in router.context(DAY)
+    assert "last: 17 Nov, 3 sets: set 1 35 kg x 10, set 2 35 kg x 10, set 3 35 kg x 8" in (
+        router.context(DAY))
 
 
 def test_past_sets_tool_gives_earlier_days(workout):
@@ -196,7 +197,8 @@ def test_past_sets_tool_gives_earlier_days(workout):
     reply = router.handle("what did I press before?")
     assert reply == "You did 35 kg x 10, 10, 8."
     result = fake.calls[-1]["messages"][-1]["content"][0]["content"]
-    assert "Press: 35 kg x 10, 10, 8 on 17 Nov; 32.5 kg x 10, 10 on 12 Nov." in str(result)
+    assert ("- 17 Nov, 3 sets: set 1 35 kg x 10, set 2 35 kg x 10, set 3 35 kg x 8\n"
+            "- 12 Nov, 2 sets: set 1 32.5 kg x 10, set 2 32.5 kg x 10") in str(result)
     assert workout.logged_sets(DAY) == []
 
 
