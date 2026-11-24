@@ -1,6 +1,7 @@
 # Board: gym-coach
 
 ## Workers
+- slot 1: Task 14k, building
 
 ## Ready to build
 

@@ -642,7 +642,7 @@ still wait for Task 11.
   - Done when: failing tests first; tests and lint pass; the bot restarted; the next real
     workout checked in the chat and trace tables.
 
-- [ ] **Task 14k: planned weights come from what he last lifted** (opus) `[parallel-ok]` (slot 1 only)
+- [ ] **Task 14k: planned weights come from what he last lifted** (opus) `[parallel-ok]` (slot 1 only) (taken: slot 1, 2026-11-24 17:57)
   - Asked by Brian, 2026-11-24: "curious for the gym coach app would it use my previous weight to recommend current weight"; told that it does not, and offered a task: "please do." Then: "also it should be able to retrieve past reps for the same task" (the reps of each earlier set of the same exercise, not the weight alone: in the history the planner reads, in the last-time line, and when he asks the coach what he did before).
   - Found by the orchestrator in the code: `planner.propose` gives the model the profile, the equipment lists, the dates and the week's earlier proposal only; `router.context` gives the workout coach today's sets only. `store.logged_sets(date)` holds every earlier set but nothing reads the earlier days back.
   - Files: modify `src/gym_coach/store.py`, `planner.py`, `router.py` (and `coach.py` if the wording of the prompt needs it), with their tests.
