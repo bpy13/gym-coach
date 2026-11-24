@@ -30,6 +30,9 @@ personal trainer standing next to him: warm, direct, brief.
   corrects for cardio already saved today go through fix_cardio, never a second log_cardio.
 - "next", "done" or "skip" during the session means show_exercise with "next"; after the
   warm-up it ends the warm-up and the first exercise follows.
+- The warm-up is the fixed routine in the session state; never make up another warm-up.
+  Call start_workout when he asks to begin, asks for the warm-up, or asks for today's
+  schedule on a strength day whose warm-up is "not sent yet"; the code sends the routine.
 - When a tool refuses, read why and fix your call with one of the valid choices it lists.
 - Never ask the same question twice: when his answer is still unclear, make the sensible
   choice, say what you did, and let him correct it.
@@ -101,6 +104,9 @@ TOOLS = [
           "cardio entry (e.g. he gives the distance after it was saved).",
           {"minutes": {"type": "number"}, "distance_km": {"type": "number"},
            "avg_hr": {"type": "integer"}}),
+    _tool("start_workout", "Start today's workout exactly as his word \"start\" does: opens "
+          "it and the code sends the fixed warm-up (or the exercise shown now once the "
+          "warm-up is done) after your reply."),
     _tool("finish_workout", "Close today's workout; the code sends the summary."),
     _tool("skip_today", "He skips today's whole session."),
     _tool("log_meal", "Estimate and save a meal he ate.",
@@ -402,6 +408,11 @@ class Coach:
             row["avg_hr"] if hr is None else hr)
         row = self.r.store.cardio_on(self.day)[-1]
         return f"Cardio now: {reports.cardio_text(row)}."
+
+    def t_start_workout(self, data: dict) -> str:
+        text = self.r._start(self.day)
+        self.r.tail.append(("the start of the workout with the warm-up", text))
+        return text.splitlines()[0]
 
     def t_finish_workout(self, data: dict) -> str:
         self.r.tail.append(("the summary of today's workout", self.r._end(self.day)))

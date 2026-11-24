@@ -393,6 +393,15 @@ class Router:
             return "Workout started. Every exercise of today's session is done."
         return f"Workout started. Now: {session['exercises'][shown[1]]['name']}."
 
+    def _warm_up_state(self, day: str) -> str:
+        """"not sent yet" (no 07:00 message, no "start", no set), "sent, not done yet" or
+        "done"."""
+        if self.store.get(WARMUP_KEY + day) == "1":
+            return "sent, not done yet"
+        if self.store.get(FLOW_KEY + day) is None and not self.store.logged_sets(day):
+            return "not sent yet"
+        return "done"
+
     def _warm_up_over(self, day: str) -> bool:
         """End a pending warm-up; True when one was pending."""
         if self.store.get(WARMUP_KEY + day) != "1":
@@ -461,8 +470,13 @@ class Router:
             return f"Today's session: {kind} planned.{extra}"
         shown = self._shown(day)
         lines = [f"Today's session ({session['gym']} gym, {session['status']}):"]
-        if self.store.get(WARMUP_KEY + day) == "1":
-            lines.append("- Warm-up: sent, not done yet (the first exercise follows it)")
+        # the fixed warm-up and its state, always (Task 14m: the coach made one up on 24 Nov)
+        state = self._warm_up_state(day)
+        lines.append(f"- Warm-up: {state}"
+                     + (" (the first exercise follows it)" if state.startswith("sent") else "")
+                     + (" (start_workout sends it)" if state.startswith("not sent") else ""))
+        lines.append("  The fixed warm-up routine (the only one):\n"
+                     + "\n".join("  " + ln for ln in warm_up_message().splitlines()))
         names = set()
         hist = weights.History(self.store, day)  # what he did last time (Task 14k, 14l)
         for i, ex in enumerate(session["exercises"]):
@@ -660,6 +674,8 @@ class Router:
             return f"Today ({s['status']}): cardio at about 130 bpm."
         lines = [f"Today at the {s['gym']} gym ({s['status']}):"] + [
             exercise_line(e) for e in s["exercises"]]
+        if s["exercises"] and self._warm_up_state(s["date"]) != "done":
+            lines.append('Warm-up first: say "start" and I send it.')
         return "\n".join(lines)
 
 
