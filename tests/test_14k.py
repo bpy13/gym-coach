@@ -34,9 +34,10 @@ def store(tmp_path):
     s.close()
 
 
-def log(store, day, name, weight, *reps, plan=True):
+def log(store, day, name, weight, *reps, plan=True, equipment="Chest press"):
     if plan:
-        store.add_plan_session(day, "home", "strength", "done", [ex(name, weight)])
+        store.add_plan_session(day, "home", "strength", "done",
+                               [ex(name, weight, equipment)])
     for r in reps:
         reports.log_report(store, day, [{"exercise": name, "weight_kg": weight, "reps": r}])
 
@@ -103,16 +104,25 @@ def test_history_older_than_eight_weeks_is_left_out(store):
 
 
 def test_message_says_why_each_changed_weight_moved(store):
+    # Task 14l: the code sets the weight by the rule (the model's number is overruled) and
+    # the line says where it came from; each exercise on its own machine (one step 2.5 kg)
     log(store, "2026-11-12", "Press", 20, 12, 12, 12)
-    log(store, "2026-11-13", "Pulldown", 30, 10, 7, 6)
-    log(store, "2026-11-14", "Curl", 10, 10, 9, 9)
-    _, msg = run(store, [ex("Press", 22.5), ex("Pulldown", 27.5), ex("Curl", 10)])
+    log(store, "2026-11-13", "Pulldown", 30, 10, 7, 6, equipment="Lat pulldown")
+    log(store, "2026-11-14", "Curl", 10, 10, 9, 9, equipment="Leg extension")
+    home = [ex("Press", 99), ex("Pulldown", 27.5, "Lat pulldown"),
+            ex("Curl", 10, "Leg extension")]
+    sessions = [{"date": d, "kind": "strength", "exercises": home} for d in STRENGTH[:2]]
+    sessions.append({"date": STRENGTH[2], "kind": "strength",
+                     "exercises": [ex("Leg press", 40, "Seated leg press")]})
+    sessions.append({"date": "2026-11-18", "kind": "cardio", "exercises": []})
+    fake = FakeClaude([json.dumps({"message": "Here is your week.", "sessions": sessions})])
+    msg = propose(Claude(fake, store, 5.0), store, MODEL, WEEK, profile_path=PROFILE,
+                  equipment_path=EQ)
     assert "Weights from what you last lifted:" in msg
-    assert ("Press: 20 → 22.5 kg (you reached 12 reps on every set: 20 kg x 12, 12, 12 "
-            "on 12 Nov)") in msg
-    assert "Pulldown: 30 → 27.5 kg (a set fell below 8 reps" in msg
-    assert "Curl:" not in msg  # kept: no line
-    assert msg.count("Press: 20 →") == 1  # once, though it is in three sessions
+    assert "Press: 22.5 kg (up from 20 kg x 12, 12, 12 on 12 Nov)" in msg
+    assert "Pulldown: 27.5 kg (down from 30 kg x 10, 7, 6 on 13 Nov)" in msg
+    assert "Curl:" not in msg.split("Weights from")[1]  # kept: no line
+    assert msg.count("Press: 22.5 kg (up") == 1  # once, though it is in two home sessions
 
 
 def test_no_change_lines_without_history(store):
@@ -166,8 +176,8 @@ def workout(store):
 def test_context_shows_what_he_did_last_time(workout):
     router, _ = router_for(workout)
     text = router.context(DAY)
-    assert "- Press: 0 of 3 sets logged (plan 8-12 reps at 35 kg) | last: 35 kg x 10, 10, 8 " \
-           "on 17 Nov" in text
+    assert ("- Press: 0 of 3 sets logged (plan 8-12 reps at 35 kg, same as last time) | last: "
+            "35 kg x 10, 10, 8 on 17 Nov") in text
     row = next(ln for ln in text.splitlines() if ln.startswith("- Row:"))
     assert "last:" not in row
 

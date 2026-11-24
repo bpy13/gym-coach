@@ -229,7 +229,7 @@ class Coach:
 
     # helpers
     def _strength(self) -> dict:
-        session = self.r.store.plan_session(self.day)
+        session = self.r.plan(self.day)
         if not session or session["kind"] != "strength":
             raise ToolRefused("There is no strength session today.")
         return session
@@ -262,7 +262,7 @@ class Coach:
         return row
 
     def _names(self) -> str:
-        session = self.r.store.plan_session(self.day) or {}
+        session = self.r.plan(self.day) or {}
         return ", ".join(e["name"] for e in session.get("exercises", [])) or "none"
 
     # tools that change today's strength session or its sets (they open the workout)
@@ -270,7 +270,7 @@ class Coach:
         raw = data.get("sets")
         if not isinstance(raw, list) or not raw:
             raise ToolRefused("sets must list at least one set.")
-        session = self.r.store.plan_session(self.day)
+        session = self.r.plan(self.day)
         strength = bool(session and session["kind"] == "strength")
         names = {key(e["name"]): e["name"] for e in session["exercises"]} if strength else {}
         sets = []
@@ -409,7 +409,7 @@ class Coach:
 
     # the rest
     def t_skip_today(self, data: dict) -> str:
-        if not self.r.store.plan_session(self.day):
+        if not self.r.plan(self.day):
             return "There is no session planned today; nothing changed."
         self.r.store.set_plan_status(self.day, "skipped")
         reports.close_workout(self.r.store, self.day)

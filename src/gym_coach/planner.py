@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import date, timedelta
 
-from gym_coach import reports
+from gym_coach import reports, weights
 from gym_coach.context import (
     DEFAULT_EQUIPMENT,
     DEFAULT_PHOTOS,
@@ -20,7 +20,7 @@ from gym_coach.prompts import CARDIO_SENTENCE, PLAN_SYSTEM, plan_prompt
 
 log = logging.getLogger(__name__)
 STRENGTH_PER_WEEK = 3
-HISTORY_WEEKS = 8  # the proposal sees what he lifted in the last 8 weeks
+HISTORY_WEEKS = weights.HISTORY_WEEKS  # the proposal sees what he lifted in the last 8 weeks
 HISTORY_DAYS = 3  # per exercise, its last 3 logged days
 STRENGTH_WEEKDAYS = (1, 3, 6)  # Tuesday, Thursday (home), Sunday (parents')
 CARDIO_WEEKDAYS = (0, 2, 4)  # Monday, Wednesday, Friday (home)
@@ -96,38 +96,18 @@ def history_text(store, past: dict[str, list[dict]]) -> str | None:
             "the weights to plan from):\n" + "\n".join(lines))
 
 
-def _number(value) -> float | None:
-    try:
-        return None if value is None or isinstance(value, bool) else float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def weight_changes(store, sessions: list[dict], past: dict[str, list[dict]]) -> list[str]:
-    """One line per planned exercise whose weight differs from what he last lifted, with why."""
+def weight_changes(sessions: list[dict]) -> list[str]:
+    """One line per planned exercise whose weight moved from what he last lifted, with why
+    (the "weight_note" of `weights.apply`), once per exercise name."""
     lines, seen = [], set()
     for s in sessions:
         for ex in s["exercises"]:
+            note = str(ex.get("weight_note") or "")
             k = reports._key(str(ex.get("name", "")))
-            if k in seen or k not in past:
+            if k in seen or not note.startswith(("up from", "down from")):
                 continue
             seen.add(k)
-            last = past[k][0]
-            before, new = reports.top_weight(last), _number(ex.get("weight_kg"))
-            if before is None or new is None or new == before:
-                continue
-            rng = reports.planned_range(store, last)
-            if rng is None and _number(ex.get("rep_low")) and _number(ex.get("rep_high")):
-                rng = int(ex["rep_low"]), int(ex["rep_high"])
-            reps = [r["reps"] for r in last["sets"] if r["reps"] is not None]
-            if rng and reps and min(reps) >= rng[1]:
-                why = f"you reached {rng[1]} reps on every set"
-            elif rng and reps and min(reps) < rng[0]:
-                why = f"a set fell below {rng[0]} reps"
-            else:
-                why = "last time"
-            lines.append(f"{ex['name']}: {before:g} → {new:g} kg ({why}: "
-                         f"{reports.day_text(last)})")
+            lines.append(f"{ex['name']}: {ex['weight_kg']:g} kg ({note})")
     return lines
 
 
@@ -275,9 +255,11 @@ def propose(claude, store, model: str, week_start: date, change: str | None = No
                         equipment_path, photos_dir)
     for d in dates:  # a new proposal replaces the old week
         store.delete_plan_session(d)
+    # the weights come from his history by the same rule as the day's list (Task 14l)
+    sessions = [weights.apply(store, s) for s in sessions]
     for s in sessions:
         store.add_plan_session(s["date"], s["gym"], s["kind"], "proposed", s["exercises"])
-    changes = weight_changes(store, sessions, past)
+    changes = weight_changes(sessions)
     text = _message(data)
     if changes:
         text += "\n\nWeights from what you last lifted:\n" + "\n".join(changes)

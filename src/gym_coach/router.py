@@ -6,12 +6,18 @@ from __future__ import annotations
 import json
 from datetime import date, datetime, timedelta
 
-from gym_coach import meals, planner, reports, targets
+from gym_coach import meals, planner, reports, targets, weights
 from gym_coach.albums import shrink
 from gym_coach.coach import FLOW_KEY, Coach, ToolRefused
 from gym_coach.context import DEFAULT_EQUIPMENT, DEFAULT_PROFILE, equipment_for
 from gym_coach.llm import HK, CeilingReached, LLMError
-from gym_coach.messages import proposal_message, stretch_message, warm_up_message, weight_text
+from gym_coach.messages import (
+    exercise_line,
+    proposal_message,
+    stretch_message,
+    warm_up_message,
+    weight_text,
+)
 
 PENDING_CHANGE = "pending:plan_change"  # a future-week change kept for the next /propose
 CHAT_LINES = 12  # today's chat lines each model call sees outside a workout (Task 14g)
@@ -103,6 +109,11 @@ class Router:
     def _today(self) -> date:
         return self._now().astimezone(HK).date()
 
+    def plan(self, day: str) -> dict | None:
+        """The plan of `day`; a strength session not started yet carries the weights from
+        his history (Task 14l, `weights.session`)."""
+        return weights.session(self.store, day, self._today().isoformat())
+
     def _handle(self, text: str) -> str:
         command = text.split()[0].lower() if text.startswith("/") else None
         if command == "/start":
@@ -164,7 +175,7 @@ class Router:
         far = self._typo(day, logged, before)
         added = self._add_own(day, sets, logged)
         warm_up = self._warm_up_over(day)  # a first set ends the warm-up
-        session = self.store.plan_session(day)
+        session = self.plan(day)
         new: dict[str, int] = {}
         for s in logged:
             new[s["exercise"]] = new.get(s["exercise"], 0) + 1
@@ -291,7 +302,7 @@ class Router:
         added now."""
         own = {str(s.get("exercise", "")).strip().lower() for s in raw_sets or []
                if isinstance(s, dict) and s.get("own") is True}
-        session = self.store.plan_session(day)
+        session = self.plan(day)
         if not own or not session or session["kind"] != "strength":
             return set()
         by_name = {e["name"].strip().lower(): e for e in session["exercises"]}
@@ -314,7 +325,7 @@ class Router:
     def _typo(self, day: str, logged: list[dict], before: list[dict]) -> str:
         """A note when a weight is over 1.5 times or under half the last set of that
         exercise (or, with none today, its planned weight); else ""."""
-        session = self.store.plan_session(day)
+        session = self.plan(day)
         plan = {e["name"].strip().lower(): e.get("weight_kg")
                 for e in (session or {}).get("exercises", [])}
         flagged = []
@@ -369,7 +380,7 @@ class Router:
 
     def _start(self, day: str) -> str:
         self._open(day, auto=False)
-        session = self.store.plan_session(day)
+        session = self.plan(day)
         if not session or session["kind"] != "strength" or not session["exercises"]:
             return "Workout started. Tell me what you do and I log it."
         if self.store.get(FLOW_KEY + day) is None:  # the morning message never went out
@@ -391,7 +402,7 @@ class Router:
 
     def _end(self, day: str) -> str:
         """The "Finish session" button or finish_workout: close, remove the button."""
-        session = self.store.plan_session(day)
+        session = self.plan(day)
         if session and session["kind"] == "strength":
             self.store.set(FLOW_KEY + day, str(len(session["exercises"])))  # no more exercises
         self._warm_up_over(day)
@@ -442,7 +453,7 @@ class Router:
         return "\n\n".join(parts)
 
     def _session_state(self, day: str) -> str:
-        session = self.store.plan_session(day)
+        session = self.plan(day)
         logged = reports.format_log(self.store, day).splitlines()[1:]
         if not session or session["kind"] != "strength":
             kind = session["kind"] if session else "nothing"
@@ -453,7 +464,7 @@ class Router:
         if self.store.get(WARMUP_KEY + day) == "1":
             lines.append("- Warm-up: sent, not done yet (the first exercise follows it)")
         names = set()
-        past = self.store.recent_sets(day, days=1)  # what he did last time (Task 14k)
+        hist = weights.History(self.store, day)  # what he did last time (Task 14k, 14l)
         for i, ex in enumerate(session["exercises"]):
             name = ex["name"]
             names.add(name.strip().lower())
@@ -465,10 +476,13 @@ class Router:
                 line = f"- {name}: {done} of {ex['sets']} sets logged ({sets})"
             else:
                 line = (f"- {name}: 0 of {ex['sets']} sets logged"
-                        f" (plan {ex['rep_low']}-{ex['rep_high']} reps at {ex['weight_kg']} kg)")
-            last = past.get(name.strip().lower())
+                        f" (plan {ex['rep_low']}-{ex['rep_high']} reps at {ex['weight_kg']} kg"
+                        + _from(ex.get("weight_note")) + ")")
+            last = hist.days_of(ex, session["gym"])
             if last:
                 line += f" | last: {reports.day_text(last[0])}"
+                if reports._key(last[0]["exercise"]) != reports._key(name):
+                    line += f" as {last[0]['exercise']}"
             if shown is not None and shown[1] == i:
                 line += " <- shown now"
             lines.append(line)
@@ -540,7 +554,7 @@ class Router:
     def _shown(self, day: str) -> tuple[dict, int] | None:
         """(today's strength session, index of the exercise shown now) while one is open."""
         raw = self.store.get(FLOW_KEY + day)
-        session = self.store.plan_session(day)
+        session = self.plan(day)
         if raw is None or not session or session["kind"] != "strength":
             return None
         index = int(raw)
@@ -639,16 +653,28 @@ class Router:
         return "Approved. I will send each day's session at the usual time."
 
     def _today_text(self) -> str:
-        s = self.store.plan_session(self._today().isoformat())
+        s = self.plan(self._today().isoformat())
         if not s:
             return "Nothing planned today."
         if s["kind"] == "cardio":
             return f"Today ({s['status']}): cardio at about 130 bpm."
         lines = [f"Today at the {s['gym']} gym ({s['status']}):"] + [
-            f"{e['name']}: {e['sets']} x {e['rep_low']}-{e['rep_high']} at {e['weight_kg']} kg"
-            for e in s["exercises"]
-        ]
+            exercise_line(e) for e in s["exercises"]]
         return "\n".join(lines)
+
+
+def _from(note: str | None) -> str:
+    """The plan weight's source for the coach's context (the "last:" part has the sets)."""
+    if not note:
+        return ""
+    cut = min((i for i in (note.find(f"; {g}:") for g in weights.GYM_LABELS.values())
+               if i >= 0), default=len(note))
+    first, other = note[:cut], note[cut + 2:]
+    said = next((w for k, w in (("up from", "one step up from last time"),
+                                ("down from", "one step down from last time"),
+                                ("last time", "same as last time")) if first.startswith(k)),
+                first)
+    return f", {said}" + (f"; {other}" if other else "")
 
 
 def _day_month(d: date) -> str:

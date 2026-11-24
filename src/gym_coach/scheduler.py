@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from gym_coach import reports
+from gym_coach import reports, weights
 from gym_coach.messages import list_message, warm_up_message
 
 log = logging.getLogger(__name__)
@@ -55,7 +55,7 @@ class Scheduler:
         marker = f"sent:session:{day}"
         if self.store.get(marker):
             return
-        session = self.store.plan_session(day)
+        session = weights.session(self.store, day, day)  # weights from history (Task 14l)
         if not session or session["status"] != "approved":
             return
         self.send(list_message(session))
