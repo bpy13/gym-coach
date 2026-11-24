@@ -1,6 +1,7 @@
 # Board: gym-coach
 
 ## Workers
+- slot 1: Task 14m, labels built and live; waiting on the orchestrator for one rule question
 
 ## Ready to build
 
