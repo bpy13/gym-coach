@@ -97,14 +97,15 @@ def history_text(store, past: dict[str, list[dict]]) -> str | None:
 
 
 def weight_changes(sessions: list[dict]) -> list[str]:
-    """One line per planned exercise whose weight moved from what he last lifted, with why
-    (the "weight_note" of `weights.apply`), once per exercise name."""
+    """One line per planned exercise that felt easy or hard last time, with its weight and
+    why (the "weight_note" and "weight_label" of `weights.apply`), once per exercise name."""
     lines, seen = [], set()
     for s in sessions:
         for ex in s["exercises"]:
             note = str(ex.get("weight_note") or "")
             k = reports._key(str(ex.get("name", "")))
-            if k in seen or not note.startswith(("up from", "down from")):
+            if k in seen or ex.get("weight_label") not in (weights.TOO_EASY,
+                                                            weights.STRUGGLING):
                 continue
             seen.add(k)
             lines.append(f"{ex['name']}: {ex['weight_kg']:g} kg ({note})")

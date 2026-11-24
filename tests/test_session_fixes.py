@@ -260,7 +260,8 @@ def test_coach_call_sees_chat_lines_and_session_state(store):
     prompt = call["messages"][0]["content"]
     assert "Bot (NOT delivered): Press: 20 kg x 10. 1 set left." in prompt
     assert "Brian: press 10" in prompt
-    assert "Press: 1 of 2 sets logged (Press set 1: 20 kg x 10) <- shown now" in prompt
+    assert ("Press: 1 of 2 sets logged (Press set 1: 20 kg x 10) | today so far: steady: "
+            "hold the weight <- shown now") in prompt
 
 
 def test_repeat_after_an_undelivered_reply_is_left_to_the_model(store):

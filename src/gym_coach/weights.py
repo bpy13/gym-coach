@@ -1,8 +1,9 @@
 """The weight to use for a planned exercise, from what he last lifted (Task 14l). No model call.
 
-Rule (Task 14k, orchestrator's call 2026-11-24): start from the last day's top weight; one step
-up when every set of that day reached the top of the rep range or more; one step down when a
-set missed the bottom; keep it otherwise.
+Rule (Task 14m, replacing 14k's): the last day's sets are labelled by `read_sets`. Too easy:
+one step up from his last top weight. Steady: his last top weight, aim for one more rep.
+Struggling: stay at the weight where it went wrong; one step under when the day before was
+struggling at that same weight too.
 
 History is matched by the exercise name first, then by the same equipment at the same gym
 (the plan of the day the sets were logged names the equipment), so "Chest press" finds
@@ -29,6 +30,8 @@ GENERIC = {"machine", "machines", "cable", "cables", "dumbbell", "dumbbells", "b
            "seated", "standing", "with", "the", "a", "an", "on", "and", "of", "one-arm",
            "single-arm", "two-arm", "rope", "bar", "handle"}
 GYM_LABELS = {"home": "home gym", "parents": "parents gym"}
+TOO_EASY, STEADY, STRUGGLING = "too easy", "steady", "struggling"
+FELL_REPS = 3  # reps lost from set to set at one weight, in total, that mean struggling
 
 
 def _words(name: str) -> set[str]:
@@ -141,24 +144,82 @@ class History:
         top = reports.top_weight(last) if last else None
         if top is None:
             return {"weight_kg": None, "note": other} if other else None
-        rng = last["range"]
-        if rng is None and ex.get("rep_low") is not None and ex.get("rep_high") is not None:
-            rng = int(ex["rep_low"]), int(ex["rep_high"])
-        reps = [r["reps"] for r in last["sets"] if r["reps"] is not None]
+        rng = _range(last, ex)
         step = self.step(ex, gym, here, top)
         said = reports.day_text(last)
-        if rng and reps and min(reps) >= rng[1]:
-            weight, note = top + step, f"up from {said}"
-        elif rng and reps and min(reps) < rng[0] and top - step > 0:
-            weight, note = top - step, f"down from {said}"
+        label, why, at = read_sets(last["sets"], rng)
+        if label == TOO_EASY:
+            weight, note = top + step, f"last time {top:g} kg felt easy: {said}"
+        elif label == STRUGGLING:
+            at = top if at is None else at
+            before = (read_sets(here[1]["sets"], _range(here[1], ex))
+                      if len(here) > 1 else (STEADY, "", None))
+            if before[0] == STRUGGLING and before[2] == at and at - step > 0:
+                weight, note = at - step, f"one step down, {why} twice in a row: {said}"
+            else:
+                weight, note = at, f"again, {why} last time: {said}"
         else:
-            weight, note = top, f"last time {said}"
+            weight, note = top, f"again, aim for one more rep: {said}"
         if last["exercise"].strip().lower() != str(ex.get("name", "")).strip().lower():
             note += f" ({last['exercise']})"
         if other:
             note += f"; {other}"
         weight = round(weight, 2)
-        return {"weight_kg": int(weight) if weight == int(weight) else weight, "note": note}
+        return {"weight_kg": int(weight) if weight == int(weight) else weight, "note": note,
+                "label": label}
+
+
+def _range(entry: dict, ex: dict) -> tuple[int, int] | None:
+    """The rep range planned the day the sets were logged, else today's."""
+    if entry.get("range"):
+        return entry["range"]
+    if ex.get("rep_low") is not None and ex.get("rep_high") is not None:
+        return int(ex["rep_low"]), int(ex["rep_high"])
+    return None
+
+
+def read_sets(sets: list[dict], rng: tuple[int, int] | None) -> tuple[str, str, float | None]:
+    """How one day's sets of an exercise went, in logged order (Task 14m; thresholds are the
+    orchestrator's call, 2026-11-24): (label, why, the weight where it went wrong or None).
+
+    STRUGGLING: reps fell from set to set at the same weight by FELL_REPS or more in total,
+    or he lowered the weight during the day, or a set ended under the bottom of the range.
+    TOO_EASY: he raised the weight and still reached the top of the range on the last set,
+    or every set reached the top or more. STEADY otherwise."""
+    rows = [r for r in sets if r.get("reps") is not None]
+    if not rows:
+        return STEADY, "", None
+    pairs = list(pairwise(rows))
+    same = [(a, b) for a, b in pairs if a["weight_kg"] == b["weight_kg"]]
+    fell = sum(max(0, a["reps"] - b["reps"]) for a, b in same)
+    if fell >= FELL_REPS:
+        at = max((a["weight_kg"] for a, b in same if a["reps"] > b["reps"]
+                  and a["weight_kg"] is not None), default=None)
+        return STRUGGLING, "reps fell", at
+    lowered = [a["weight_kg"] for a, b in pairs if a["weight_kg"] is not None
+               and b["weight_kg"] is not None and b["weight_kg"] < a["weight_kg"]]
+    if lowered:
+        return STRUGGLING, "you lowered the weight", max(lowered)
+    under = [r for r in rows if rng and r["reps"] < rng[0]]
+    if under:
+        at = max((r["weight_kg"] for r in under if r["weight_kg"] is not None), default=None)
+        return STRUGGLING, f"a set under {rng[0]} reps", at
+    raised = any(a["weight_kg"] is not None and b["weight_kg"] is not None
+                 and b["weight_kg"] > a["weight_kg"] for a, b in pairs)
+    if rng and ((raised and rows[-1]["reps"] >= rng[1])
+                or all(r["reps"] >= rng[1] for r in rows)):
+        return TOO_EASY, "felt easy", None
+    return STEADY, "", None
+
+
+ADVICE = {"too easy": "go up one step for the next set", "steady": "hold the weight",
+          "struggling": "hold, or drop one step, for the next set"}
+
+
+def today_text(sets: list[dict], rng: tuple[int, int] | None) -> str:
+    """Today's sets so far, read the same way, for the coach (Task 14m)."""
+    label, why, _ = read_sets(sets, rng)
+    return f"{label}" + (f" ({why})" if why and label != TOO_EASY else "") + f": {ADVICE[label]}"
 
 
 def _gap(weights) -> float | None:
@@ -177,6 +238,7 @@ def apply(store, session: dict) -> dict:
     hist = History(store, session["date"])
     for ex in out["exercises"]:
         ex.pop("weight_note", None)
+        ex.pop("weight_label", None)
         if ex.get("own"):
             continue
         found = hist.weight_for(ex, session["gym"])
@@ -184,6 +246,7 @@ def apply(store, session: dict) -> dict:
             continue
         if found["weight_kg"] is not None:
             ex["weight_kg"] = found["weight_kg"]
+            ex["weight_label"] = found["label"]
         ex["weight_note"] = found["note"]
     return out
 

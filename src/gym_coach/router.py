@@ -488,6 +488,12 @@ class Router:
                                  for r in self.store.logged_sets(day)
                                  if r["exercise"].strip().lower() == name.strip().lower())
                 line = f"- {name}: {done} of {ex['sets']} sets logged ({sets})"
+                rows = [r for r in self.store.logged_sets(day)
+                        if reports._key(r["exercise"]) == reports._key(name)]
+                rng = ((int(ex["rep_low"]), int(ex["rep_high"]))
+                       if ex.get("rep_low") is not None and ex.get("rep_high") is not None
+                       else None)
+                line += f" | today so far: {weights.today_text(rows, rng)}"  # Task 14m
             else:
                 line = (f"- {name}: 0 of {ex['sets']} sets logged"
                         f" (plan {ex['rep_low']}-{ex['rep_high']} reps at {ex['weight_kg']} kg"
@@ -686,10 +692,7 @@ def _from(note: str | None) -> str:
     cut = min((i for i in (note.find(f"; {g}:") for g in weights.GYM_LABELS.values())
                if i >= 0), default=len(note))
     first, other = note[:cut], note[cut + 2:]
-    said = next((w for k, w in (("up from", "one step up from last time"),
-                                ("down from", "one step down from last time"),
-                                ("last time", "same as last time")) if first.startswith(k)),
-                first)
+    said = first.split(": ")[0] if ": " in first else first  # the reason, not the sets
     return f", {said}" + (f"; {other}" if other else "")
 
 

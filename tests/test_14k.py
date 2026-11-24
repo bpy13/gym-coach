@@ -119,10 +119,10 @@ def test_message_says_why_each_changed_weight_moved(store):
     msg = propose(Claude(fake, store, 5.0), store, MODEL, WEEK, profile_path=PROFILE,
                   equipment_path=EQ)
     assert "Weights from what you last lifted:" in msg
-    assert "Press: 22.5 kg (up from 20 kg x 12, 12, 12 on 12 Nov)" in msg
-    assert "Pulldown: 27.5 kg (down from 30 kg x 10, 7, 6 on 13 Nov)" in msg
+    assert "Press: 22.5 kg (last time 20 kg felt easy: 20 kg x 12, 12, 12 on 12 Nov)" in msg
+    assert "Pulldown: 30 kg (again, reps fell last time: 30 kg x 10, 7, 6 on 13 Nov)" in msg
     assert "Curl:" not in msg.split("Weights from")[1]  # kept: no line
-    assert msg.count("Press: 22.5 kg (up") == 1  # once, though it is in two home sessions
+    assert msg.count("Press: 22.5 kg (last") == 1  # once, though it is in two home sessions
 
 
 def test_no_change_lines_without_history(store):
@@ -176,7 +176,8 @@ def workout(store):
 def test_context_shows_what_he_did_last_time(workout):
     router, _ = router_for(workout)
     text = router.context(DAY)
-    assert ("- Press: 0 of 3 sets logged (plan 8-12 reps at 35 kg, same as last time) | last: "
+    assert ("- Press: 0 of 3 sets logged (plan 8-12 reps at 35 kg, again, aim for one more rep) "
+            "| last: "
             "35 kg x 10, 10, 8 on 17 Nov") in text
     row = next(ln for ln in text.splitlines() if ln.startswith("- Row:"))
     assert "last:" not in row
