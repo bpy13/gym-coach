@@ -150,3 +150,4 @@ setting or a small change.
   once are the builder's call; Brian may change them. (Brian, 2026-11-23: "I thought the app
   would log cardio session", then "Yes, add it" to adding cardio logging and saving the
   23 Nov jog.)
+- 2026-11-24, Brian: the coach uses the weights he last lifted when it recommends weights (plan Task 14k). The rules are the orchestrator's call (Brian may change them): start from the last logged weight, raise by the smallest step only when every set reached the top of the rep range, keep otherwise, lower when he missed the bottom. (Brian, 2026-11-24: "please do.")
