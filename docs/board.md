@@ -1,6 +1,7 @@
 # Board: gym-coach
 
 ## Workers
+- slot 1: Task 14q (Strava run picture, start-run link), building
 
 ## Ready to build
 
