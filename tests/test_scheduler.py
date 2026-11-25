@@ -72,7 +72,7 @@ def test_cardio_day_sends_cardio_line(store):
     sch, sent = make(store, Clock(2026, 11, 18, 7, 0))
     sch.tick()
     assert len(sent) == 1
-    assert "Cardio" in sent[0] and "130" in sent[0]
+    assert "Jog" in sent[0] and "130" in sent[0]
 
 
 def test_rest_day_sends_nothing(store):
@@ -88,8 +88,8 @@ def test_parents_gym_heading(store):
     assert sent[0].splitlines()[0] == "Parents' gym, Sun 22 Nov"
 
 
-@pytest.mark.parametrize("status", ["proposed", "skipped", "done"])
-def test_only_approved_sessions_are_sent(store, status):
+@pytest.mark.parametrize("status", ["skipped", "done"])  # proposed is sent (Task 14p)
+def test_skipped_or_done_sessions_are_not_sent(store, status):
     store.add_plan_session("2026-11-17", "home", "strength", status, EXERCISES)
     sch, sent = make(store, Clock(2026, 11, 17, 7, 0))
     sch.tick()

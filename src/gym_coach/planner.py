@@ -16,7 +16,7 @@ from gym_coach.context import (
     profile_text,
 )
 from gym_coach.llm import LLMError
-from gym_coach.prompts import CARDIO_SENTENCE, PLAN_SYSTEM, plan_prompt
+from gym_coach.prompts import PLAN_SYSTEM, WEEK_SENTENCE, plan_prompt
 
 log = logging.getLogger(__name__)
 STRENGTH_PER_WEEK = 3
@@ -71,6 +71,11 @@ def validate(data, dates: list[str], equipment: dict[str, set[str]]) -> list[dic
         sessions.append({"date": day, "gym": gym, "kind": kind, "exercises": exercises})
     if sum(s["kind"] == "strength" for s in sessions) != STRENGTH_PER_WEEK:
         raise PlanError(f"need exactly {STRENGTH_PER_WEEK} strength sessions")
+    # the week is fixed (Task 14p): every Monday, Wednesday and Friday has a jog, by code
+    for day in dates:
+        d = date.fromisoformat(day)
+        if d.weekday() in CARDIO_WEEKDAYS and day not in seen:
+            sessions.append({"date": day, "gym": gym_for(d), "kind": "cardio", "exercises": []})
     return sorted(sessions, key=lambda s: s["date"])
 
 
@@ -98,8 +103,8 @@ def history_text(store, past: dict[str, list[dict]]) -> str | None:
 
 def _message(data: dict) -> str:
     text = str(data.get("message") or "").strip()
-    if CARDIO_SENTENCE not in text:
-        text = (text + "\n\n" if text else "") + CARDIO_SENTENCE + "."
+    if WEEK_SENTENCE not in text:
+        text = (text + "\n\n" if text else "") + WEEK_SENTENCE + "."
     return text
 
 

@@ -105,7 +105,7 @@ def test_no_album_on_cardio_day(setup):
     cardio = {"date": "2026-11-18", "gym": "home", "kind": "cardio", "status": "approved",
               "exercises": []}
     parts = session_parts(cardio, eq, photos)
-    assert len(parts) == 1 and parts[0][1] == [] and "Cardio" in parts[0][0]
+    assert len(parts) == 1 and parts[0][1] == [] and "Jog" in parts[0][0]
 
 
 def test_unreadable_image_becomes_text_only(setup):
@@ -136,7 +136,7 @@ def test_proposal_message_lists_every_day():
     assert text.startswith("Here is your week.")
     assert "Home gym, Mon 23 Nov: strength" in text
     assert "Leg ext: 3 x 8-12" in text
-    assert "Home gym, Tue 24 Nov: cardio" in text
+    assert "Home gym, Tue 24 Nov: jog" in text
 
 
 def test_proposal_sends_album_for_first_session_then_full_text(store, setup):
@@ -157,7 +157,7 @@ def test_proposal_sends_album_for_first_session_then_full_text(store, setup):
     assert "Reply with what you did" not in " ".join(t for _, t in tg.sent[:-1])
     text = tg.sent[-1][1]
     assert "Your week." in text and "Press: 3 x 8-12 (no earlier record)" in text
-    assert "Wed 25 Nov: cardio" in text
+    assert "Wed 25 Nov: jog" in text
     app.handle(Incoming(2, 5, text="/today"))
     assert len(tg.pictures) == 1  # only a proposal sends pictures
 

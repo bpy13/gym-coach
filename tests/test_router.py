@@ -122,5 +122,5 @@ def test_propose_command_stores_proposed_week(store):
     reply = router.handle("/propose")
     assert "Here is your week." in reply
     rows = store.plan_sessions("2026-11-23", "2026-11-29")
-    assert len(rows) == 4 and {r["status"] for r in rows} == {"proposed"}
+    assert len(rows) == 6 and {r["status"] for r in rows} == {"proposed"}  # + Mon, Fri jog
     assert len(fake.calls) == 1 and fake.calls[0]["model"] == "claude-opus-5-5"

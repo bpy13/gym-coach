@@ -56,7 +56,8 @@ class Scheduler:
         if self.store.get(marker):
             return
         session = weights.session(self.store, day, day)  # weights from history (Task 14l)
-        if not session or session["status"] != "approved":
+        # a planned session needs no approval (Task 14p, Brian 2026-11-25)
+        if not session or session["status"] not in ("proposed", "approved"):
             return
         self.send(list_message(session))
         if session["kind"] == "strength" and session["exercises"]:

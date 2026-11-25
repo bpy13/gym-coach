@@ -6,7 +6,7 @@ import pytest
 from fakes import FakeClaude
 from gym_coach.llm import Claude
 from gym_coach.planner import PlanError, approve, propose
-from gym_coach.prompts import CARDIO_SENTENCE
+from gym_coach.prompts import WEEK_SENTENCE
 from gym_coach.store import Store
 
 MODEL = "claude-opus-5-5"
@@ -52,9 +52,9 @@ def week(store):
 def test_valid_plan_is_stored_proposed(store):
     fake, msg = run(store, [plan()])
     rows = week(store)
-    assert [r["status"] for r in rows] == ["proposed"] * 4
-    assert rows[0]["gym"] == "home" and rows[0]["exercises"][0]["equipment"] == "Chest press"
-    assert CARDIO_SENTENCE in msg
+    assert [r["status"] for r in rows] == ["proposed"] * 6
+    assert rows[1]["gym"] == "home" and rows[1]["exercises"][0]["equipment"] == "Chest press"
+    assert WEEK_SENTENCE in msg
     assert len(fake.calls) == 1
 
 
@@ -62,7 +62,7 @@ def test_missing_equipment_is_regenerated_once(store):
     fake, _ = run(store, [plan(equipment="Leg press"), plan()])  # no leg press at home
     assert len(fake.calls) == 2
     assert "Leg press" in prompt_of(fake, 1)
-    assert len(week(store)) == 4
+    assert len(week(store)) == 6
 
 
 def test_equipment_checked_against_that_days_gym(store):
@@ -90,12 +90,12 @@ def test_saturday_strength_rejected(store):
 
 def test_cardio_sentence_added_if_model_omits_it(store):
     _, msg = run(store, [plan(message="Hi")])
-    assert msg.startswith("Hi") and CARDIO_SENTENCE in msg
+    assert msg.startswith("Hi") and WEEK_SENTENCE in msg
 
 
 def test_approve(store):
     run(store, [plan()])
-    assert approve(store, WEEK) == 4
+    assert approve(store, WEEK) == 6
     assert {r["status"] for r in week(store)} == {"approved"}
 
 
@@ -105,7 +105,7 @@ def test_change_request_makes_new_proposal(store):
     fake, _ = run(store, [moved], change="move cardio to Friday")
     assert "move cardio to Friday" in prompt_of(fake, 0) and "2026-11-18" in prompt_of(fake, 0)
     dates = [r["date"] for r in week(store)]
-    assert "2026-11-20" in dates and "2026-11-18" not in dates
+    assert "2026-11-20" in dates  # Wednesday keeps its jog (Task 14p)
 
 
 def test_strength_only_on_tuesday_thursday_sunday(store):
@@ -125,5 +125,5 @@ def test_cardio_only_on_monday_wednesday_friday(store):
         run(store, [bad] * 2)
     run(store, [plan()])
     kinds = {r["date"]: r["kind"] for r in week(store)}
-    assert [d for d, k in kinds.items() if k == "cardio"] == ["2026-11-18"]
+    assert [d for d, k in kinds.items() if k == "cardio"] == ["2026-11-16", "2026-11-18", "2026-11-20"]
     assert sorted(d for d, k in kinds.items() if k == "strength") == sorted(WEEKDAYS)

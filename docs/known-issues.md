@@ -5,8 +5,8 @@
 - Task 11 live check (2026-11-16): the bot runs from the logon task on the Task 9g fix. The owner
   is paired. The first week (5 days) is stored as `proposed`; no exercise uses equipment outside
   its gym's list. The month's model cost is US$0.07 over 7 calls. Another sender and a forged
-  update are dropped (tests in `tests	est_telegram.py`, no real second account used). Still
-  open: Brian approves the schedule in the chat. Milestone 1's last line (one real session
+  update are dropped (tests in `tests	est_telegram.py`, no real second account used). Since Task 14p
+  (2026-11-25) there is no approval step: a proposed session is reminded like an approved one. Milestone 1's last line (one real session
   logged at each gym) is Brian's.
 - Checked without the live bot (2026-11-13): 83 tests and ruff pass. Tests cover dropping other
   senders, group messages never pairing, and `.env` owner override.

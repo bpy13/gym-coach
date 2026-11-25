@@ -183,7 +183,7 @@ def test_proposal_keeps_only_listed_illustration_ids(ill, tmp_path):
             profile_path="examples/profile.md", equipment_path="examples/equipment.md",
             illustrations=i)
     saved = store.plan_sessions("2026-11-16", "2026-11-22")
-    assert [e.get("illustration") for e in saved[0]["exercises"]] == ["Goblet_Squat", None]
+    assert [e.get("illustration") for e in saved[1]["exercises"]] == ["Goblet_Squat", None]
     assert "Goblet_Squat: Goblet Squat" in str(fake.calls[0])
     store.close()
 
@@ -225,7 +225,7 @@ def test_proposal_without_ids_gets_them_by_name_without_asking(ill, tmp_path):
     fake, saved = _propose(ill, tmp_path, [
         ex("Goblet Squats", "dumbbells on a rack"),
         ex("cable row", "dual adjustable cable machine")])
-    assert [e.get("illustration") for e in saved[0]["exercises"]] == ["Goblet_Squat", "Cable_Row"]
+    assert [e.get("illustration") for e in saved[1]["exercises"]] == ["Goblet_Squat", "Cable_Row"]
     assert len(fake.calls) == 1
 
 
@@ -239,7 +239,7 @@ def test_unmatched_exercise_asks_model_once_for_id_or_replacement(ill, tmp_path)
         ex("Front loaded knee bend", "dumbbells on a rack"),
         ex("Pull thing", "dual adjustable cable machine"),
         ex("Odd", "dumbbells on a rack")], [reply])
-    got = saved[0]["exercises"]
+    got = saved[1]["exercises"]  # Monday is a jog
     assert [e.get("illustration") for e in got] == ["Goblet_Squat", "Cable_Row", None]
     assert got[1]["name"] == "Cable Row" and got[1]["sets"] == 3
     assert len(fake.calls) == 2

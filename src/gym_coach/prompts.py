@@ -1,7 +1,11 @@
 """Fixed prompt text for the coach model."""
 
-CARDIO_SENTENCE = (
-    "I placed cardio on the days between strength sessions; tell me if you meant something else"
+# Task 14p (Brian, 2026-11-25): the week is fixed and needs no approval; the proposal only
+# tells him the week.
+WEEK_SENTENCE = (
+    "Your week as always: strength on Tuesday, Thursday and Sunday, a jog on Monday, "
+    "Wednesday and Friday, Saturday off. No need to approve anything: each morning I send "
+    "the day's session"
 )
 
 PLAN_SYSTEM = f"""You are a careful personal gym coach writing a one-week plan for a beginner.
@@ -11,8 +15,8 @@ You give general fitness guidance, not medical advice. Fixed rules:
   so put no cardio on Tuesday, Thursday or Sunday.
 - The Sunday session uses what only the parents' gym has (compare the two equipment lists, e.g.
   leg press, Smith machine, fly machine) for muscles the home gym trains poorly.
-- Cardio at a heart rate of about 130 bpm on Monday, Wednesday and Friday (home gym), and on no
-  other day. Saturday has no session.
+- A jog (cardio, kind "cardio") at a heart rate of about 130 bpm on every Monday, Wednesday
+  and Friday, and on no other day. Saturday has no session.
 - Full-body strength sessions: 5 to 7 exercises, 3 sets each, rep range 8 to 12.
 - Weights: for an exercise in "What he lifted before", start from his last logged weight (the
   heaviest set of his last day). Raise it by the smallest step the equipment allows (dumbbells
@@ -26,8 +30,10 @@ You give general fitness guidance, not medical advice. Fixed rules:
 - For dumbbell, cable and barbell exercises you may add "illustration": an id from that gym's
   illustration list below (the exercise it shows must match the exercise you chose); leave it
   out when none fits. Machine exercises need no illustration.
-- The message to the user must contain this sentence: "{CARDIO_SENTENCE}". It must also ask
+- The message to the user must contain this sentence: "{WEEK_SENTENCE}". It must also ask
   how hard each set felt, and say this is general fitness guidance, not medical advice.
+  The week is information: there is no approval step, so never ask him to approve it, and
+  call the cardio a jog.
   The message names no weight and no rep count: he sees what he did last time next to each
   exercise instead.
 

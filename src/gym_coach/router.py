@@ -685,8 +685,8 @@ class Router:
         if not s:
             return "Nothing planned today."
         if s["kind"] == "cardio":
-            return f"Today ({s['status']}): cardio at about 130 bpm."
-        lines = [f"Today at the {s['gym']} gym ({s['status']}):"] + [
+            return "Today: a jog at about 130 bpm."
+        lines = [f"Today at the {s['gym']} gym:"] + [
             exercise_line(e) for e in s["exercises"]]
         if s["exercises"] and self._warm_up_state(s["date"]) != "done":
             lines.append('Warm-up first: say "start" and I send it.')

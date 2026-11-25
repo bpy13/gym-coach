@@ -73,7 +73,7 @@ def session_message(session: dict) -> str:
     """The day's session: gym and date on the first line, then one line per exercise."""
     title = head(session)
     if session["kind"] == "cardio":
-        return f"{title}\nCardio today at a heart rate of about 130."
+        return f"{title}\nJog today at a heart rate of about 130."
     return "\n".join([title, *_lines(session), CLOSING])
 
 
@@ -89,7 +89,7 @@ def proposal_message(intro: str, sessions: list[dict]) -> str:
     blocks = []
     for s in sessions:
         if s["kind"] == "cardio":
-            blocks.append(f"{head(s)}: cardio at a heart rate of about 130.")
+            blocks.append(f"{head(s)}: jog at a heart rate of about 130.")
         else:
             blocks.append("\n".join([f"{head(s)}: strength", *_lines(s)]))
     return "\n\n".join([intro, *blocks]) if blocks else intro
