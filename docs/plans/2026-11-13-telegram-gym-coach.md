@@ -685,6 +685,12 @@ still wait for Task 11.
     month's cost in `/cost` rose by less than US$0.01 for that photo; the card asks Brian
     whether the estimate looked reasonable.
 
+- [ ] **Task 14p: no approval needed; fixed Tue/Thu/Sun strength and Mon/Wed/Fri jog** (opus) `[parallel-ok]` (slot 1 only)
+  - Why: Brian, 2026-11-25 (see decisions): no cardio reminder came today because the 25 Nov cardio row in `plan_sessions` is "proposed" and `scheduler.py:59` reminds only "approved" sessions. Brian: "no need my approval, now always Tue Thu Sun for gym and Mon Wed Fri for jog".
+  - What: reminders and the morning flow treat a planned session as approved (no approval step); the planner always lays out strength Tue/Thu/Sun (Sun at parents') and a jog Mon/Wed/Fri, nothing on Saturday; the weekly proposal message says the week as information, with no approve question. Mark the stored sessions of 26, 27 and 29 Nov approved now (a jog for 25 Nov is past its reminder; leave its status unless he logs it). Wording "jog" in his chat language.
+  - Done when: a failing test first that a "proposed" session gets its reminder; tests for the fixed weekday layout; bot restarted through its scheduled task and bot.log shows "bot started" with no error; `plan_sessions` shows 26/27/29 Nov approved; tomorrow's (26 Nov) strength reminder is due at its usual time (check the scheduler's next due time in the log or a dry run).
+  - Notes: the database write is allowed for this task (Brian's word above); no test Telegram messages to Brian.
+
 ## Phase 3 – Weekly review (sonnet)
 
 - [ ] **Task 17: progress numbers** needs: Task 16
