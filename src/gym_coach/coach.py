@@ -32,6 +32,12 @@ personal trainer standing next to him: warm, direct, brief.
   distance or heart rate he gives. If he gave no time, ask once how many minutes; when he
   says he is done with cardio, log it before you call finish_workout. Numbers he adds or
   corrects for cardio already saved today go through fix_cardio, never a second log_cardio.
+- A running-app summary picture (Strava or another app; a distance, a time, a pace, maybe a
+  map, in any language) is his jog: call log_cardio with the distance in km, the
+  moving time exactly as shown in moving_time (e.g. "31:48"; not the elapsed time), and the
+  average heart rate if shown. Never estimate it as a meal. In your reply say the distance, the time and the
+  pace from the tool result. A second picture of the same run: call log_cardio again with
+  what it shows; the code updates the saved run instead of adding one.
 - "next", "done" or "skip" during the session means show_exercise with "next"; after the
   warm-up it ends the warm-up and the first exercise follows.
 - The warm-up is the fixed routine in the session state; never make up another warm-up.
@@ -122,13 +128,16 @@ TOOLS = [
           ["exercise"]),
     _tool("set_weight", "Change the planned weight of an exercise for TODAY.",
           {"exercise": _EX, "weight_kg": _KG}, ["exercise", "weight_kg"]),
-    _tool("log_cardio", "Save cardio he did today (jog, run, bike, rower...); this marks "
-          "today's session done.",
+    _tool("log_cardio", "Save cardio he did today (jog, run, bike, rower...); on a jog day "
+          "this marks today's session done.",
           {"activity": {"type": "string", "description": "e.g. jogging, cycling"},
            "minutes": {"type": "number", "description": "how long, more than 0"},
-           "distance_km": {"type": "number", "description": "km, if he says"},
-           "avg_hr": {"type": "integer", "description": "average heart rate, if he says"}},
-          ["activity", "minutes"]),
+           "moving_time": {"type": "string", "description": "from a running-app picture: "
+                           "the moving time exactly as shown, e.g. \"31:48\" or \"1:02:15\"; "
+                           "it replaces minutes"},
+           "distance_km": {"type": "number", "description": "km, if he says or it shows"},
+           "avg_hr": {"type": "integer", "description": "average heart rate, if given"}},
+          ["activity"]),
     _tool("fix_cardio", "Change or add the minutes, distance or heart rate of today's last "
           "cardio entry (e.g. he gives the distance after it was saved).",
           {"minutes": {"type": "number"}, "distance_km": {"type": "number"},
@@ -199,6 +208,32 @@ def _changed(result: str) -> bool:
     low = result.lower()
     return not (low.startswith(("not saved", "no change")) or "nothing changed" in low
                 or "; nothing logged" in low)
+
+
+def _clock_minutes(value) -> float:
+    """'31:48' -> 31.8, '1:02:15' -> 62.25 (a running app's moving time)."""
+    parts = str(value).strip().split(":")
+    try:
+        numbers = [int(p) for p in parts]
+    except ValueError:
+        numbers = []
+    if len(numbers) not in (2, 3) or any(n < 0 for n in numbers) or any(
+            n > 59 for n in numbers[1:]):
+        raise ToolRefused(f"moving_time must look like 31:48 or 1:02:15, not {value!r}.")
+    seconds = sum(n * 60 ** i for i, n in enumerate(reversed(numbers)))
+    if seconds <= 0:
+        raise ToolRefused(f"moving_time must be more than 0, not {value!r}.")
+    return seconds / 60
+
+
+def _same_run(row: dict, minutes: float, distance: float | None) -> bool:
+    """True when a new cardio entry is the saved `row` again (a second picture of the same
+    run): minutes within 5 % (at least 1 min) and, when both have one, distance within 5 %."""
+    if abs(row["minutes"] - minutes) > max(1.0, 0.05 * max(row["minutes"], minutes)):
+        return False
+    if distance and row.get("distance_km"):
+        return abs(row["distance_km"] - distance) <= 0.05 * max(row["distance_km"], distance)
+    return True
 
 
 def _optional(data: dict, field: str) -> float | None:
@@ -441,15 +476,31 @@ class Coach:
         activity = str(data.get("activity") or "").strip()
         if not activity:
             raise ToolRefused("Give the activity, e.g. jogging.")
-        minutes = _positive(data.get("minutes"), "minutes")
+        if data.get("moving_time") not in (None, ""):
+            minutes = _clock_minutes(data["moving_time"])
+        else:
+            minutes = _positive(data.get("minutes"), "minutes")
         distance = _optional(data, "distance_km")
         hr = None if data.get("avg_hr") is None else _positive_int(data["avg_hr"], "avg_hr")
         r = self.r
+        same = next((row for row in reversed(r.store.cardio_on(self.day))
+                     if _same_run(row, minutes, distance)), None)
+        if same is not None:  # a second picture of the same run (Task 14q)
+            r.store.update_cardio(same["id"], minutes,
+                                  same["distance_km"] if distance is None else distance,
+                                  same["avg_hr"] if hr is None else hr)
+            row = next(x for x in r.store.cardio_on(self.day) if x["id"] == same["id"])
+            return (f"Same run as the one already saved today, updated (not added): "
+                    f"{reports.cardio_text(row)}.")
         now = r._now().astimezone(HK).isoformat(timespec="seconds")
         r.store.add_cardio(self.day, activity, minutes, distance, hr, now)
         reports.mark_done(r.store, self.day)
         row = r.store.cardio_on(self.day)[-1]
-        return f"Saved cardio: {reports.cardio_text(row)}."
+        session = r.store.plan_session(self.day)
+        note = (" Today is a strength day: its strength session stays open (not done)."
+                if session and session["kind"] == "strength" and session["status"] != "done"
+                else "")
+        return f"Saved cardio: {reports.cardio_text(row)}.{note}"
 
     def t_fix_cardio(self, data: dict) -> str:
         rows = self.r.store.cardio_on(self.day)

@@ -637,6 +637,13 @@ class Router:
     def _meal(self, text: str | None, jpeg: bytes | None = None) -> str:
         now = self._now().astimezone(HK)
         meal = meals.log_meal(self.store, self.claude, self.fast, now, text, jpeg)
+        if meal.get("run") and jpeg is not None:
+            # a running-app summary (Strava) shared without a caption: the coach logs the
+            # run from the picture (Task 14q)
+            self.understood = "photo without caption: running-app summary"
+            return self._coach(now.date().isoformat(), "(a photo without a caption: the "
+                               f"estimate call read it as a running-app summary, {meal['what']})",
+                               jpeg, False)
         if meal.get("meal") is False:
             return (f"That looks like {meal['what']}, not a meal, so I logged nothing. What is "
                     "it? Send it again with a caption, e.g. \"can I use this for rows?\"")

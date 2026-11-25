@@ -12,15 +12,22 @@ from gym_coach.messages import list_message, warm_up_message
 
 log = logging.getLogger(__name__)
 CLOSE_DAY_TIME = "21:00"  # a day with sets logged is marked done (orchestrator, 2026-11-17)
+# under the jog reminder (Task 14q). No link opens Strava's record screen from a Telegram
+# button (buttons take only http(s)/tg links, and Strava's app links have no record path);
+# /dashboard is one of Strava's app links, so it opens the app, one tap from Record.
+STRAVA_BUTTON = {"inline_keyboard": [[{"text": "Open Strava",
+                                        "url": "https://www.strava.com/dashboard"}]]}
 
 
 class Scheduler:
-    """`send(text)` delivers a message to Brian. `now()` returns an aware datetime."""
+    """`send(text)` delivers a message to Brian; `send_button(text, reply_markup)` one with
+    a button (without it the jog reminder goes out plain). `now()` returns an aware datetime."""
 
     def __init__(self, store, send, session_time: str = "07:00",
-                 timezone: str = "Asia/Hong_Kong", now=None):
+                 timezone: str = "Asia/Hong_Kong", now=None, send_button=None):
         self.store = store
         self.send = send
+        self.send_button = send_button
         self.session_time = session_time
         self._tz = ZoneInfo(timezone)
         self._now = now or (lambda: datetime.now(self._tz))
@@ -59,7 +66,10 @@ class Scheduler:
         # a planned session needs no approval (Task 14p, Brian 2026-11-25)
         if not session or session["status"] not in ("proposed", "approved"):
             return
-        self.send(list_message(session))
+        if session["kind"] == "cardio" and self.send_button is not None:
+            self.send_button(list_message(session), STRAVA_BUTTON)
+        else:
+            self.send(list_message(session))
         if session["kind"] == "strength" and session["exercises"]:
             # the warm-up right after the list (Task 14j); the router sends the first
             # exercise when he says it is done or reports a first set

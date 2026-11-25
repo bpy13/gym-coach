@@ -47,7 +47,7 @@ def test_log_cardio_saves_and_marks_the_day_done(store, equipment):
         ("jogging", 53, 7.2, 131)]
     assert rows[0]["saved_at"].startswith(DAY)
     assert store.plan_session(DAY)["status"] == "done"
-    assert "Saved cardio: jogging 53 min, 7.2 km, avg 131 bpm." in results(
+    assert "Saved cardio: jogging 53 min, 7.2 km, 7:22 /km, avg 131 bpm." in results(
         fake.calls[1])[0]["content"]
 
 
@@ -98,7 +98,7 @@ def test_fix_cardio_adds_the_distance_to_the_saved_entry(store, equipment):
     router.handle("about 6.5 km")
     rows = store.cardio_on(DAY)
     assert [(r["minutes"], r["distance_km"], r["avg_hr"]) for r in rows] == [(53, 6.5, None)]
-    assert "Cardio now: jogging 53 min, 6.5 km." in results(fake.calls[1])[0]["content"]
+    assert "Cardio now: jogging 53 min, 6.5 km, 8:09 /km." in results(fake.calls[1])[0]["content"]
 
 
 def test_fix_cardio_changes_only_the_last_entry(store, equipment):

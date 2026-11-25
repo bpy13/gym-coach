@@ -251,10 +251,10 @@ class App:
             except Exception:
                 log.exception("sending a message part failed; going on")
 
-    def send_to_owner(self, text: str) -> None:
+    def send_to_owner(self, text: str, reply_markup: dict | None = None) -> None:
         chat = self.chat_id or int(self.store.get("chat_id") or 0)
         if chat:  # the scheduler retries a failed one itself, so it is not sent late
-            self._text(chat, text, kind="scheduled")
+            self._text(chat, text, kind="scheduled", reply_markup=reply_markup)
         else:
             log.warning("no chat known yet; message not sent")
 
@@ -298,7 +298,8 @@ def build(config: Config) -> tuple[App, Scheduler, Store]:
                               illustrations=illustrations, show_tip=config.show_form_tip)
 
     app = App(telegram, router, store, parts_for=parts_for, exercise_for=exercise_for)
-    scheduler = Scheduler(store, app.send_to_owner, config.session_time, config.timezone)
+    scheduler = Scheduler(store, app.send_to_owner, config.session_time, config.timezone,
+                          send_button=app.send_to_owner)
     return app, scheduler, store
 
 

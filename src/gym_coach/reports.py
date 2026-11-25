@@ -56,10 +56,12 @@ def remove(store, day: str, row_id: int) -> None:
 
 
 def mark_done(store, day: str) -> bool:
-    """Mark a proposed or approved day `done` if any set or cardio is logged on it."""
+    """Mark a proposed or approved day `done` if any set is logged on it, or on a jog day
+    any cardio (a jog on a strength day leaves the strength session open, Task 14q)."""
     session = store.plan_session(day)
-    if (session and session["status"] in ("proposed", "approved")
-            and (store.logged_sets(day) or store.cardio_on(day))):
+    if not session or session["status"] not in ("proposed", "approved"):
+        return False
+    if store.logged_sets(day) or (session["kind"] == "cardio" and store.cardio_on(day)):
         store.set_plan_status(day, "done")
         return True
     return False
@@ -87,7 +89,7 @@ def correct(store, day: str, raw_sets) -> list[dict]:
 
 def format_log(store, day: str, header: str = "Logged:") -> str:
     """The day's sets, one line per exercise, e.g. 'Chest press: 35 kg x 10, 10, 8', then
-    one line per cardio entry, e.g. 'Cardio: jogging 53 min, 7.2 km, avg 131 bpm'."""
+    one line per cardio entry, e.g. 'Cardio: jogging 53 min, 7.2 km, 7:22 /km'."""
     groups: dict[str, list[dict]] = {}
     for r in store.logged_sets(day):
         groups.setdefault(r["exercise"], []).append(r)
@@ -98,11 +100,29 @@ def format_log(store, day: str, header: str = "Logged:") -> str:
     return "\n".join([header] + lines)
 
 
+def minutes_text(minutes: float) -> str:
+    """'53 min', or minutes and seconds for a part minute: 31.8 -> '31:48 min'."""
+    seconds = round(minutes * 60)
+    if seconds % 60 == 0:
+        return f"{seconds // 60} min"
+    return f"{seconds // 60}:{seconds % 60:02d} min"
+
+
+def pace_text(minutes, distance_km) -> str | None:
+    """Minutes per km, e.g. 31.8 min over 5.12 km -> '6:13 /km'; None without a distance."""
+    if not minutes or not distance_km:
+        return None
+    seconds = round(minutes * 60 / distance_km)
+    return f"{seconds // 60}:{seconds % 60:02d} /km"
+
+
 def cardio_text(row: dict) -> str:
-    """One cardio entry, e.g. 'jogging 53 min, 7.2 km, avg 131 bpm'."""
-    parts = [f"{row['activity']} {row['minutes']:g} min"]
+    """One cardio entry, e.g. 'jogging 31:48 min, 5.12 km, 6:13 /km, avg 131 bpm'
+    (pace from the moving time and distance, Task 14q)."""
+    parts = [f"{row['activity']} {minutes_text(row['minutes'])}"]
     if row.get("distance_km"):
         parts.append(f"{row['distance_km']:g} km")
+        parts.append(pace_text(row["minutes"], row["distance_km"]))
     if row.get("avg_hr"):
         parts.append(f"avg {row['avg_hr']} bpm")
     return ", ".join(parts)

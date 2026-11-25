@@ -12,7 +12,10 @@ Answer JSON: {"meal": true, "what": "<what the photo shows, a few words>",
 "description": "<short name of the meal>", "kcal": 650, "protein_g": 35}
 Use the image and/or the text. A note such as "half portion" changes the amounts. Give your
 best single number for each, never a range. A photo that shows no food or drink (gym
-equipment, a weight plate, a screen) is not a meal: answer {"meal": false, "what": "..."}."""
+equipment, a weight plate, a screen) is not a meal: answer {"meal": false, "what": "..."}.
+A running or workout app's summary picture (Strava, Nike Run Club, Garmin, a phone's fitness
+app: a distance, a time, a pace, often a map, in any language) is a run, not a meal: answer
+{"meal": false, "run": true, "what": "..."}."""
 
 
 def _number(value) -> float:
@@ -34,7 +37,8 @@ def log_meal(store, claude, model: str, now: datetime, text: str | None = None,
     if not isinstance(data, dict):
         raise LLMError("The meal estimate was not an object")
     if data.get("meal") is False:
-        return {"meal": False, "what": str(data.get("what") or "something else").strip()}
+        return {"meal": False, "run": data.get("run") is True,
+                "what": str(data.get("what") or "something else").strip()}
     meal = {"description": str(data.get("description") or text or "meal").strip(),
             "kcal": round(_number(data.get("kcal"))),
             "protein_g": round(_number(data.get("protein_g")))}
