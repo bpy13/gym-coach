@@ -1,7 +1,8 @@
 # Known issues
 
-- The logon task `gym-coach-bot` is not registered. Brian runs `scripts\install-logon-task.ps1`
-  himself (the safety check refused a worker run).
+- The logon task `gym-coach-bot` is registered and runs the bot (restarted through it by the
+  workers; see CLAUDE.md "The live bot"). Re-run `scripts\install-logon-task.ps1` only after the
+  script itself changes.
 - Task 11 live check (2026-11-16): the bot runs from the logon task on the Task 9g fix. The owner
   is paired. The first week (5 days) is stored as `proposed`; no exercise uses equipment outside
   its gym's list. The month's model cost is US$0.07 over 7 calls. Another sender and a forged
