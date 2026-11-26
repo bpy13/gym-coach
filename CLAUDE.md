@@ -39,7 +39,7 @@ Read these before substantial changes:
 - Data is in `data/gym.db`: sets, meals, body numbers, cardio, the full chat (`chat`, kept for
   good) and a `trace` row per message (what the bot understood, seconds per step). Telegram does
   not let a bot read old messages, so this table is the only record of what he typed.
-  `scripts\show_chat.py` prints one day's chat with its traces; `scriptseplay_day.py` replays a
+  `scripts\show_chat.py` prints one day's chat with its traces; `scripts\replay_day.py` replays a
   day through the model on a copy of the db and spends real money (cap with `--max-cost`).
 - Before changing live rows by hand, copy the db first (`data/gym.db.bak-<what>`), and tell Brian
   what was changed.
